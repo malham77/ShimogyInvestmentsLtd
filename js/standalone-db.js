@@ -1036,21 +1036,33 @@
     save: saveDb
   };
 
-  // Transparent fetch adapter for /api/* calls
+  function getBearerToken(headers) {
+    if (!headers) return '';
+    var raw = '';
+    if (typeof headers.get === 'function') {
+      raw = headers.get('Authorization') || headers.get('authorization') || '';
+    } else {
+      raw = headers.Authorization || headers.authorization || '';
+    }
+    return raw.indexOf('Bearer ') === 0 ? raw.slice(7).trim() : '';
+  }
+
+  function parseJsonBody(init) {
+    var body = {};
+    if (init && init.body && typeof init.body === 'string') {
+      try { body = JSON.parse(init.body); } catch (_e) { body = {}; }
+    }
+    return body;
+  }
+
+  // Transparent fetch adapter for /api/* calls (Cloud Firestore -> Express SQLite -> Offline LocalStorage)
   if (typeof window.fetch === 'function') {
     var nativeFetch = window.fetch.bind(window);
-    window.fetch = function (input, init) {
-      var url = typeof input === 'string' ? input : (input && input.url) || '';
-      var isApi = url.indexOf('/api/') === 0 && url.indexOf('/api/media/') !== 0;
 
-      if (!isApi) {
-        return nativeFetch(input, init);
-      }
-
+    var fallbackHttpOrLocal = function (input, init, url) {
       if (window.location.protocol === 'file:') {
         return Promise.resolve(handleStandaloneApi(url, init));
       }
-
       return nativeFetch(input, init)
         .then(function (res) {
           var ct = (res.headers && res.headers.get('content-type')) || '';
@@ -1064,5 +1076,129 @@
           return handleStandaloneApi(url, init);
         });
     };
+
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var isApi = url.indexOf('/api/') === 0 && url.indexOf('/api/media/') !== 0;
+
+      if (!isApi) {
+        return nativeFetch(input, init);
+      }
+
+      var pathOnly = String(url).split('?')[0];
+      var method = String((init && init.method) || 'GET').toUpperCase();
+      var body = parseJsonBody(init);
+      var token = getBearerToken(init && init.headers);
+      var cloud = window.ShimogyCloud;
+
+      if (cloud && typeof cloud.isEnabled === 'function' && cloud.isEnabled()) {
+        // 1. Public site data (always sync from Cloud Firestore when available so all devices see live edits)
+        if (pathOnly === '/api/site-data' && method === 'GET') {
+          return cloud.getPublicSiteData()
+            .then(function (cloudData) {
+              if (cloudData) return jsonResp(200, cloudData);
+              return fallbackHttpOrLocal(input, init, url);
+            })
+            .catch(function () {
+              return fallbackHttpOrLocal(input, init, url);
+            });
+        }
+
+        // 2. Public service requests -> saved directly to Cloud Firestore so admin sees them everywhere
+        if (pathOnly === '/api/requests' && method === 'POST') {
+          if (!body.request_type || !body.applicant_name || !body.applicant_phone) {
+            return Promise.resolve(jsonResp(400, { error: 'Full name, phone number, and request type are required.' }));
+          }
+          if (!body.age_confirmed) {
+            return Promise.resolve(jsonResp(400, { error: 'Age verification or parent/guardian consent confirmation is required.' }));
+          }
+          return cloud.createServiceRequest(body)
+            .then(function (res) {
+              if (window.location.protocol !== 'file:') {
+                nativeFetch(input, init).catch(function () {});
+              }
+              return jsonResp(201, res);
+            })
+            .catch(function () {
+              return fallbackHttpOrLocal(input, init, url);
+            });
+        }
+
+        // 3. Data deletion requests -> saved directly to Cloud Firestore
+        if (pathOnly === '/api/deletion-requests' && method === 'POST') {
+          if (!body.full_name || !body.phone) {
+            return Promise.resolve(jsonResp(400, { error: 'Full name and registered phone number are required to verify your deletion request.' }));
+          }
+          return cloud.createDeletionRequest(body)
+            .then(function (res) {
+              if (window.location.protocol !== 'file:') {
+                nativeFetch(input, init).catch(function () {});
+              }
+              return jsonResp(201, res);
+            })
+            .catch(function () {
+              return fallbackHttpOrLocal(input, init, url);
+            });
+        }
+
+        // 4. Member phone + password login -> works from any device globally via Cloud Firestore
+        if (pathOnly === '/api/member/login' && method === 'POST') {
+          return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
+            .then(function (cloudRes) {
+              if (cloudRes) return jsonResp(200, cloudRes);
+              return fallbackHttpOrLocal(input, init, url);
+            })
+            .catch(function () {
+              return fallbackHttpOrLocal(input, init, url);
+            });
+        }
+
+        // 5. Member session load (/api/member/me)
+        if (pathOnly === '/api/member/me' && method === 'GET' && (token.indexOf('cloud_portal_') === 0 || token.indexOf('cloud_mem_uid_') === 0)) {
+          var waitReady = token.indexOf('cloud_mem_uid_') === 0 && typeof cloud.waitForAuthReady === 'function'
+            ? cloud.waitForAuthReady()
+            : Promise.resolve();
+          return waitReady
+            .then(function () { return cloud.fetchMemberSessionFromCloud(token); })
+            .then(function (res) {
+              if (res) return jsonResp(200, res);
+              return jsonResp(401, { error: 'Session expired. Please sign in again.' });
+            })
+            .catch(function () {
+              return jsonResp(401, { error: 'Unable to load cloud portfolio.' });
+            });
+        }
+
+        // 6. Cloud logout
+        if (pathOnly === '/api/logout' && method === 'POST') {
+          var shouldCloudOut = token.indexOf('cloud_') === 0 || (typeof cloud.isAdminSignedIn === 'function' && cloud.isAdminSignedIn());
+          if (shouldCloudOut && typeof cloud.signOutCloud === 'function') {
+            cloud.signOutCloud().catch(function () {});
+          }
+          return fallbackHttpOrLocal(input, init, url);
+        }
+
+        // 7. Admin protected endpoints when authenticated with Cloud Admin
+        if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login') {
+          var isCloudToken = token.indexOf('cloud_adm_') === 0;
+          var authWait = typeof cloud.waitForAuthReady === 'function' ? cloud.waitForAuthReady() : Promise.resolve();
+          return authWait.then(function () {
+            if (cloud.isAdminSignedIn()) {
+              return cloud.handleAdminApi(pathOnly, method, body).then(function (cloudResp) {
+                if (cloudResp) return jsonResp(cloudResp.status, cloudResp.data);
+                return fallbackHttpOrLocal(input, init, url);
+              });
+            }
+            if (isCloudToken) {
+              return jsonResp(401, { error: 'Cloud administrator session expired. Please sign in with Google again.' });
+            }
+            return fallbackHttpOrLocal(input, init, url);
+          });
+        }
+      }
+
+      return fallbackHttpOrLocal(input, init, url);
+    };
   }
 })();
+

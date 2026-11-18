@@ -5,15 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About Us &amp; Office Location | SHIMOGY Investment Group</title>
   <meta name="description" content="Learn about SHIMOGY Investment Group Ltd, our mission, Kawempe Tula Kampala office location, contact hours, image licensing, and youth protection standards." />
-  <meta name="robots" content="index, follow" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="theme-color" content="#0A192F" />
   <link rel="canonical" href="about.html" />
+  <meta property="og:site_name" content="SHIMOGY Investment Group Ltd" />
   <meta property="og:title" content="About Us &amp; Office Location | SHIMOGY Investment Group" />
   <meta property="og:description" content="Official business details, story, mission, and Kawempe Tula office map for SHIMOGY Investment Group Ltd." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="assets/aistudio/partnership_65dac3a6.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="About Us &amp; Office Location | SHIMOGY Investment Group" />
+  <meta name="twitter:description" content="Official business details, story, mission, and Kawempe Tula office map for SHIMOGY Investment Group Ltd." />
+  <script>try{if(localStorage.getItem('shimogy_theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
   <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="css/style.css" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"index.html"},{"@type":"ListItem","position":2,"name":"About Us","item":"about.html"}]}</script>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -138,6 +146,9 @@
       </nav>
 
       <div class="header-actions">
+        <button type="button" id="themeToggleBtn" class="theme-toggle-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Toggle Light / Dark Theme">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
         <a href="https://wa.me/256752259416" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp btn-sm wa-direct-link">WhatsApp Us</a>
         <a href="dashboard.html" class="btn btn-primary btn-sm">Client Portal</a>
       </div>
@@ -342,6 +353,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="js/firebase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>

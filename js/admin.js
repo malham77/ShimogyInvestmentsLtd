@@ -89,7 +89,45 @@
     urlEl.addEventListener('change', sync);
   }
 
-  // Image upload helper (File -> base64 -> /api/admin/upload -> sets target input URL + preview)
+  function compressImageDataUrl(dataUrl, maxDim, quality, cb) {
+    var str = String(dataUrl || '');
+    if (!str.startsWith('data:image/') || str.length <= 95000) {
+      cb(str);
+      return;
+    }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var w = img.width || maxDim;
+        var h = img.height || maxDim;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var out = canvas.toDataURL('image/jpeg', quality);
+        if (out.length > 112000) {
+          out = canvas.toDataURL('image/jpeg', 0.52);
+        }
+        cb(out);
+      } catch (_e) {
+        cb(str);
+      }
+    };
+    img.onerror = function () { cb(str); };
+    img.src = str;
+  }
+
+  // Image upload helper (File -> compressed base64 -> /api/admin/upload -> sets target input URL + preview)
   function bindImageUpload(fileInputId, targetUrlInputId, previewImgId, fallbackUrl) {
     var fileEl = document.getElementById(fileInputId);
     var urlEl = document.getElementById(targetUrlInputId);
@@ -99,21 +137,30 @@
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function () {
-        apiFetch('/api/admin/upload', {
-          method: 'POST',
-          body: JSON.stringify({ filename: file.name, dataUrl: reader.result })
-        })
-          .then(function (res) {
-            urlEl.value = res.url;
-            if (previewImgId) setPreviewImg(previewImgId, res.url, fallbackUrl);
-            showToast('Image uploaded to SQLite database: ' + res.url, false);
+        compressImageDataUrl(reader.result, 900, 0.74, function (finalDataUrl) {
+          apiFetch('/api/admin/upload', {
+            method: 'POST',
+            body: JSON.stringify({ filename: file.name, dataUrl: finalDataUrl })
           })
-          .catch(function (err) {
-            showToast('Upload failed: ' + err.message, true);
-          });
+            .then(function (res) {
+              urlEl.value = res.url;
+              if (previewImgId) setPreviewImg(previewImgId, res.url, fallbackUrl);
+              showToast('Image saved to database successfully.', false);
+            })
+            .catch(function (err) {
+              showToast('Upload failed: ' + err.message, true);
+            });
+        });
       };
       reader.readAsDataURL(file);
     });
+  }
+
+  function closeMobileSidebar() {
+    var sidebar = document.getElementById('adminSidebar');
+    var backdrop = document.getElementById('adminSidebarBackdrop');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('open');
   }
 
   // Sidebar & Tabs Navigation
@@ -127,8 +174,7 @@
       activeBtn.classList.add('active');
       document.getElementById('activeTabTitle').textContent = labelText || activeBtn.textContent.trim();
     }
-    var sidebar = document.getElementById('adminSidebar');
-    if (sidebar) sidebar.classList.remove('open');
+    closeMobileSidebar();
   }
 
   document.querySelectorAll('.sidebar-link').forEach(function (btn) {
@@ -138,10 +184,17 @@
   });
 
   var toggleBtn = document.getElementById('sidebarToggleBtn');
+  var sidebarBackdrop = document.getElementById('adminSidebarBackdrop');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', function () {
-      document.getElementById('adminSidebar').classList.toggle('open');
+      var sidebar = document.getElementById('adminSidebar');
+      var willOpen = sidebar ? !sidebar.classList.contains('open') : false;
+      if (sidebar) sidebar.classList.toggle('open', willOpen);
+      if (sidebarBackdrop) sidebarBackdrop.classList.toggle('open', willOpen);
     });
+  }
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', closeMobileSidebar);
   }
 
   function renderOverviewCharts() {
@@ -160,6 +213,12 @@
       adminBarChart = null;
     }
 
+    var isDark = document.documentElement.classList.contains('dark');
+    var legendColor = isDark ? '#F1F5F9' : '#0A192F';
+    var tickMuted = isDark ? '#CBD5E1' : '#475569';
+    var gridColor = isDark ? 'rgba(148, 163, 184, 0.2)' : '#E2E8F0';
+    var pieBorder = isDark ? '#0F1C33' : '#FFFFFF';
+
     var invTotal = state.investments.reduce(function (acc, i) { return acc + Number(i.amount || 0); }, 0);
     var savTotal = state.savings.reduce(function (acc, s) { return acc + Number(s.balance || 0); }, 0);
     var loanTotal = state.loans.reduce(function (acc, l) { return acc + Number(l.amount || 0); }, 0);
@@ -174,8 +233,8 @@
           : ['No Financial Balances Recorded'],
         datasets: [{
           data: hasFunds ? [invTotal, savTotal, loanTotal, cycleTotal] : [1],
-          backgroundColor: hasFunds ? ['#1D4ED8', '#059669', '#D97706', '#0284C7'] : ['#CBD5E1'],
-          borderColor: '#FFFFFF',
+          backgroundColor: hasFunds ? ['#2563EB', '#10B981', '#F59E0B', '#0EA5E9'] : [isDark ? '#334155' : '#CBD5E1'],
+          borderColor: pieBorder,
           borderWidth: 2
         }]
       },
@@ -189,7 +248,7 @@
             labels: {
               boxWidth: 12,
               padding: 14,
-              color: '#0A192F',
+              color: legendColor,
               font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }
             }
           }
@@ -220,13 +279,13 @@
           {
             label: 'Pending Review',
             data: [pendingCounts.investment, pendingCounts.savings, pendingCounts.cycle, pendingCounts.loan],
-            backgroundColor: '#D97706',
+            backgroundColor: '#F59E0B',
             borderRadius: 6
           },
           {
             label: 'Reviewed / Processed',
             data: [reviewedCounts.investment, reviewedCounts.savings, reviewedCounts.cycle, reviewedCounts.loan],
-            backgroundColor: '#1D4ED8',
+            backgroundColor: '#2563EB',
             borderRadius: 6
           }
         ]
@@ -239,7 +298,7 @@
             position: 'bottom',
             labels: {
               boxWidth: 12,
-              color: '#0A192F',
+              color: legendColor,
               font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }
             }
           }
@@ -247,11 +306,11 @@
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { stepSize: 1, precision: 0, color: '#475569', font: { size: 11 } },
-            grid: { color: '#E2E8F0' }
+            ticks: { stepSize: 1, precision: 0, color: tickMuted, font: { size: 11 } },
+            grid: { color: gridColor }
           },
           x: {
-            ticks: { color: '#0A192F', font: { size: 11, weight: '600' } },
+            ticks: { color: legendColor, font: { size: 11, weight: '600' } },
             grid: { display: false }
           }
         }
@@ -334,7 +393,8 @@
 
     tbody.querySelectorAll('.edit-hero-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var item = state.heroSlides.find(function (x) { return x.id === Number(btn.getAttribute('data-id')); });
+        var targetId = String(btn.getAttribute('data-id'));
+        var item = state.heroSlides.find(function (x) { return String(x.id) === targetId; });
         if (!item) return;
         document.getElementById('heroEditId').value = item.id;
         document.getElementById('heroBadge').value = item.badge_text || '';
@@ -383,7 +443,8 @@
 
     tbody.querySelectorAll('.edit-test-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var item = state.testimonials.find(function (x) { return x.id === Number(btn.getAttribute('data-id')); });
+        var targetId = String(btn.getAttribute('data-id'));
+        var item = state.testimonials.find(function (x) { return String(x.id) === targetId; });
         if (!item) return;
         document.getElementById('testEditId').value = item.id;
         document.getElementById('testClientName').value = item.client_name || '';
@@ -429,7 +490,8 @@
 
     tbody.querySelectorAll('.edit-plan-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var p = state.plans.find(function (x) { return x.id === Number(btn.getAttribute('data-id')); });
+        var targetId = String(btn.getAttribute('data-id'));
+        var p = state.plans.find(function (x) { return String(x.id) === targetId; });
         if (!p) return;
         document.getElementById('planEditId').value = p.id;
         document.getElementById('planName').value = p.name;
@@ -478,7 +540,8 @@
 
     tbody.querySelectorAll('.edit-pub-cyc-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var c = state.publicCycles.find(function (x) { return x.id === Number(btn.getAttribute('data-id')); });
+        var targetId = String(btn.getAttribute('data-id'));
+        var c = state.publicCycles.find(function (x) { return String(x.id) === targetId; });
         if (!c) return;
         document.getElementById('pubCycleEditId').value = c.id;
         document.getElementById('pubCycleName').value = c.name;
@@ -800,8 +863,49 @@
       });
   });
 
+  function syncCloudButtonVisibility() {
+    var connectBtn = document.getElementById('connectCloudBtn');
+    if (!connectBtn) return;
+    var signedIn = window.ShimogyCloud && typeof window.ShimogyCloud.isAdminSignedIn === 'function' && window.ShimogyCloud.isAdminSignedIn();
+    connectBtn.style.display = signedIn ? 'none' : 'inline-flex';
+  }
+
+  function handleGoogleAdminSignIn() {
+    var fb = document.getElementById('adminLoginFeedback');
+    if (fb) fb.innerHTML = '';
+    if (!window.ShimogyCloud || typeof window.ShimogyCloud.signInAdminWithGoogle !== 'function') {
+      if (fb) fb.innerHTML = '<div class="alert-box alert-error">Google Cloud Sign-In is unavailable offline.</div>';
+      else showToast('Google Cloud Sign-In is unavailable offline.', true);
+      return;
+    }
+    window.ShimogyCloud.signInAdminWithGoogle()
+      .then(function (res) {
+        setToken(res.token);
+        syncCloudButtonVisibility();
+        loadOverview(true);
+        showToast('Signed in with Google Cloud Sync. All edits are now live worldwide.', false);
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) || 'Google Sign-In failed.';
+        if (fb && document.getElementById('adminLoginView').style.display !== 'none') {
+          fb.innerHTML = '<div class="alert-box alert-error">' + site.escapeHtml(msg) + '</div>';
+        } else {
+          showToast(msg, true);
+        }
+      });
+  }
+
+  var googleAdminBtn = document.getElementById('googleAdminLoginBtn');
+  if (googleAdminBtn) googleAdminBtn.addEventListener('click', handleGoogleAdminSignIn);
+
+  var connectCloudBtn = document.getElementById('connectCloudBtn');
+  if (connectCloudBtn) connectCloudBtn.addEventListener('click', handleGoogleAdminSignIn);
+
   document.getElementById('adminLogoutBtn').addEventListener('click', function () {
     apiFetch('/api/logout', { method: 'POST' }).catch(function () {});
+    if (window.ShimogyCloud && typeof window.ShimogyCloud.signOutCloud === 'function') {
+      window.ShimogyCloud.signOutCloud().catch(function () {});
+    }
     setToken('');
     document.getElementById('adminWorkspaceView').style.display = 'none';
     document.getElementById('adminLoginView').style.display = 'flex';
@@ -809,7 +913,7 @@
 
   document.getElementById('adminRefreshBtn').addEventListener('click', function () {
     loadOverview();
-    showToast('Dashboard data reloaded from SQLite database.', false);
+    showToast('Dashboard data synchronized.', false);
   });
 
   // Forms Submissions
@@ -1206,10 +1310,27 @@
   bindImagePreview('updImageUrl', 'updImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
   bindImageUpload('updImageUpload', 'updImageUrl', 'updImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
 
+  window.addEventListener('shimogy:theme-change', function () {
+    var workspace = document.getElementById('adminWorkspaceView');
+    if (workspace && workspace.style.display !== 'none') {
+      renderOverviewCharts();
+    }
+  });
+
+  window.addEventListener('shimogy:cloud-auth', function (e) {
+    var detail = (e && e.detail) || {};
+    syncCloudButtonVisibility();
+    if (detail.isAdmin && detail.user && !getToken()) {
+      setToken('cloud_adm_' + detail.user.uid);
+      loadOverview(false);
+    }
+  });
+
   // Set default date for update form
   var dateEl = document.getElementById('updDate');
   if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
 
+  syncCloudButtonVisibility();
   if (getToken()) {
     loadOverview();
   }

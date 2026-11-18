@@ -50,6 +50,12 @@
       barChartInstance = null;
     }
 
+    var isDark = document.documentElement.classList.contains('dark');
+    var legendColor = isDark ? '#F1F5F9' : '#0A192F';
+    var tickMuted = isDark ? '#CBD5E1' : '#475569';
+    var gridColor = isDark ? 'rgba(148, 163, 184, 0.2)' : '#E2E8F0';
+    var pieBorder = isDark ? '#0F1C33' : '#FFFFFF';
+
     var savingsTotal = savings.reduce(function (acc, s) { return acc + Number(s.balance || 0); }, 0);
     if (!savingsTotal && Number(displayBalance) > 0) savingsTotal = Number(displayBalance);
     var cycleTotal = cycles.reduce(function (acc, c) { return acc + Number(c.contribution || 0); }, 0);
@@ -63,8 +69,8 @@
       ? [totalInvested, savingsTotal, cycleTotal, loansTotal]
       : [1];
     var pieColors = hasData
-      ? ['#1D4ED8', '#059669', '#0284C7', '#D97706']
-      : ['#CBD5E1'];
+      ? ['#2563EB', '#10B981', '#0EA5E9', '#F59E0B']
+      : [isDark ? '#334155' : '#CBD5E1'];
 
     pieChartInstance = new window.Chart(pieCanvas.getContext('2d'), {
       type: 'doughnut',
@@ -73,7 +79,7 @@
         datasets: [{
           data: pieValues,
           backgroundColor: pieColors,
-          borderColor: '#FFFFFF',
+          borderColor: pieBorder,
           borderWidth: 2
         }]
       },
@@ -87,7 +93,7 @@
             labels: {
               boxWidth: 12,
               padding: 14,
-              color: '#0A192F',
+              color: legendColor,
               font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }
             }
           }
@@ -111,11 +117,11 @@
         labels: barLabels,
         datasets: investments.length
           ? [
-              { label: 'Capital Committed (UGX)', data: barCapital, backgroundColor: '#1D4ED8', borderRadius: 6 },
-              { label: 'Expected Payout (UGX)', data: barReturns, backgroundColor: '#0284C7', borderRadius: 6 }
+              { label: 'Capital Committed (UGX)', data: barCapital, backgroundColor: '#2563EB', borderRadius: 6 },
+              { label: 'Expected Payout (UGX)', data: barReturns, backgroundColor: '#0EA5E9', borderRadius: 6 }
             ]
           : [
-              { label: 'Current Balance (UGX)', data: barCapital, backgroundColor: ['#1D4ED8', '#059669', '#0284C7', '#D97706'], borderRadius: 6 }
+              { label: 'Current Balance (UGX)', data: barCapital, backgroundColor: ['#2563EB', '#10B981', '#0EA5E9', '#F59E0B'], borderRadius: 6 }
             ]
       },
       options: {
@@ -126,7 +132,7 @@
             position: 'bottom',
             labels: {
               boxWidth: 12,
-              color: '#0A192F',
+              color: legendColor,
               font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }
             }
           }
@@ -134,11 +140,11 @@
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { color: '#475569', font: { size: 11 } },
-            grid: { color: '#E2E8F0' }
+            ticks: { color: tickMuted, font: { size: 11 } },
+            grid: { color: gridColor }
           },
           x: {
-            ticks: { color: '#0A192F', font: { size: 11, weight: '600' } },
+            ticks: { color: legendColor, font: { size: 11, weight: '600' } },
             grid: { display: false }
           }
         }
@@ -309,10 +315,38 @@
       });
   });
 
+  var googleMemberBtn = document.getElementById('googleMemberLoginBtn');
+  if (googleMemberBtn) {
+    googleMemberBtn.addEventListener('click', function () {
+      var fb = document.getElementById('memberLoginFeedback');
+      fb.innerHTML = '';
+      if (!window.ShimogyCloud || typeof window.ShimogyCloud.signInMemberWithGoogle !== 'function') {
+        fb.innerHTML = '<div class="alert-box alert-error">Cloud Google Sign-In is unavailable offline. Please use your phone number and password.</div>';
+        return;
+      }
+      googleMemberBtn.disabled = true;
+      window.ShimogyCloud.signInMemberWithGoogle()
+        .then(function (res) {
+          setToken(res.token);
+          if (res.member) renderMember(res.member);
+          else loadMemberProfile();
+        })
+        .catch(function (err) {
+          fb.innerHTML = '<div class="alert-box alert-error">' + site.escapeHtml((err && err.message) || 'Google Sign-In did not complete.') + '</div>';
+        })
+        .finally(function () {
+          googleMemberBtn.disabled = false;
+        });
+    });
+  }
+
   document.getElementById('memberLogoutBtn').addEventListener('click', function () {
     var token = getToken();
     if (token) {
       fetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
+    }
+    if (window.ShimogyCloud && typeof window.ShimogyCloud.signOutCloud === 'function') {
+      window.ShimogyCloud.signOutCloud().catch(function () {});
     }
     showLogin();
   });
@@ -340,6 +374,11 @@
     var currentPassword = document.getElementById('curMemberPass').value;
     var newPassword = document.getElementById('newMemberPass').value;
     var fb = document.getElementById('changePassFeedback');
+
+    if (getToken().indexOf('cloud_') === 0) {
+      fb.innerHTML = '<div class="alert-box alert-info">Cloud portal passwords are managed centrally by our Kampala Operations Team (+256 752 259 416) or through your linked Google account security settings.</div>';
+      return;
+    }
 
     fetch('/api/member/change-password', {
       method: 'POST',
@@ -391,6 +430,32 @@
       .catch(function () {
         fb.innerHTML = '<div class="alert-box alert-error">Network error.</div>';
       });
+  });
+
+  window.addEventListener('shimogy:theme-change', function () {
+    if (!currentMember) return;
+    var investments = currentMember.investments || [];
+    var savings = currentMember.savings || [];
+    var loans = currentMember.loans || [];
+    var cycles = currentMember.cycles || [];
+    var totalInvested = investments.reduce(function (acc, i) { return acc + Number(i.amount || 0); }, 0);
+    if (!totalInvested && Number(currentMember.total_invested) > 0) totalInvested = Number(currentMember.total_invested);
+    var savingsSum = savings.reduce(function (acc, s) { return acc + Number(s.balance || 0); }, 0);
+    var displayBalance = Number(currentMember.balance || 0) || savingsSum;
+    renderMemberCharts(investments, savings, loans, cycles, displayBalance, totalInvested);
+  });
+
+  window.addEventListener('shimogy:cloud-auth', function (e) {
+    var detail = (e && e.detail) || {};
+    if (detail.user && !detail.isAdmin && !getToken() && window.ShimogyCloud && typeof window.ShimogyCloud.fetchMemberSessionFromCloud === 'function') {
+      var cloudToken = 'cloud_mem_uid_' + detail.user.uid;
+      window.ShimogyCloud.fetchMemberSessionFromCloud(cloudToken).then(function (res) {
+        if (res && res.member) {
+          setToken(cloudToken);
+          renderMember(res.member);
+        }
+      }).catch(function () {});
+    }
   });
 
   // Hydrate updates list

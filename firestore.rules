@@ -1,0 +1,489 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core helper primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidSha256Hex(id) {
+      return id is string && id.size() == 64 && id.matches('^[a-f0-9]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdminEmail() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'mal77ham@gmail.com' ||
+        request.auth.token.email == 'maleham06@gmail.com'
+      );
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        isBootstrappedAdminEmail() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'name', 'role', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 140
+        && data.role == 'admin'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSiteSettings(data) {
+      return data.keys().hasAll(['company_name', 'updatedAt'])
+        && data.keys().hasOnly([
+          'company_name', 'short_name', 'slogan', 'registration_info',
+          'phone_primary', 'phone_secondary', 'whatsapp_number', 'email',
+          'address', 'working_hours', 'social_facebook', 'social_tiktok',
+          'social_youtube', 'social_instagram', 'logo_url', 'about_mission',
+          'about_vision', 'about_story', 'stats_members', 'stats_capital',
+          'stats_years', 'stats_hours', 'risk_disclosure', 'age_consent_policy',
+          'quick_updates_ticker', 'updatedAt'
+        ])
+        && data.company_name is string && data.company_name.size() >= 1 && data.company_name.size() <= 160
+        && (!('short_name' in data) || (data.short_name is string && data.short_name.size() <= 60))
+        && (!('slogan' in data) || (data.slogan is string && data.slogan.size() <= 180))
+        && (!('registration_info' in data) || (data.registration_info is string && data.registration_info.size() <= 240))
+        && (!('phone_primary' in data) || (data.phone_primary is string && data.phone_primary.size() <= 40))
+        && (!('phone_secondary' in data) || (data.phone_secondary is string && data.phone_secondary.size() <= 40))
+        && (!('whatsapp_number' in data) || (data.whatsapp_number is string && data.whatsapp_number.size() <= 40))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 220))
+        && (!('working_hours' in data) || (data.working_hours is string && data.working_hours.size() <= 180))
+        && (!('social_facebook' in data) || (data.social_facebook is string && data.social_facebook.size() <= 300))
+        && (!('social_tiktok' in data) || (data.social_tiktok is string && data.social_tiktok.size() <= 300))
+        && (!('social_youtube' in data) || (data.social_youtube is string && data.social_youtube.size() <= 300))
+        && (!('social_instagram' in data) || (data.social_instagram is string && data.social_instagram.size() <= 300))
+        && (!('logo_url' in data) || (data.logo_url is string && data.logo_url.size() <= 120000))
+        && (!('about_mission' in data) || (data.about_mission is string && data.about_mission.size() <= 1200))
+        && (!('about_vision' in data) || (data.about_vision is string && data.about_vision.size() <= 1200))
+        && (!('about_story' in data) || (data.about_story is string && data.about_story.size() <= 3000))
+        && (!('stats_members' in data) || (data.stats_members is string && data.stats_members.size() <= 40))
+        && (!('stats_capital' in data) || (data.stats_capital is string && data.stats_capital.size() <= 40))
+        && (!('stats_years' in data) || (data.stats_years is string && data.stats_years.size() <= 40))
+        && (!('stats_hours' in data) || (data.stats_hours is string && data.stats_hours.size() <= 80))
+        && (!('risk_disclosure' in data) || (data.risk_disclosure is string && data.risk_disclosure.size() <= 1500))
+        && (!('age_consent_policy' in data) || (data.age_consent_policy is string && data.age_consent_policy.size() <= 1500))
+        && (!('quick_updates_ticker' in data) || (data.quick_updates_ticker is string && data.quick_updates_ticker.size() <= 1000))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHeroSlide(data) {
+      return data.keys().hasAll(['title', 'subtitle', 'image_url', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'badge_text', 'title', 'subtitle', 'cta_text', 'cta_link',
+          'image_url', 'image_alt', 'sort_order', 'is_active', 'createdAt', 'updatedAt'
+        ])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.subtitle is string && data.subtitle.size() >= 1 && data.subtitle.size() <= 600
+        && data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 120000
+        && (!('badge_text' in data) || (data.badge_text is string && data.badge_text.size() <= 140))
+        && (!('cta_text' in data) || (data.cta_text is string && data.cta_text.size() <= 80))
+        && (!('cta_link' in data) || (data.cta_link is string && data.cta_link.size() <= 240))
+        && (!('image_alt' in data) || (data.image_alt is string && data.image_alt.size() <= 240))
+        && (!('sort_order' in data) || (data.sort_order is number))
+        && (!('is_active' in data) || (data.is_active is number))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['client_name', 'quote', 'photo_url', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'client_name', 'role', 'location', 'quote', 'photo_url',
+          'photo_alt', 'sort_order', 'is_active', 'createdAt', 'updatedAt'
+        ])
+        && data.client_name is string && data.client_name.size() >= 1 && data.client_name.size() <= 140
+        && data.quote is string && data.quote.size() >= 1 && data.quote.size() <= 800
+        && data.photo_url is string && data.photo_url.size() >= 1 && data.photo_url.size() <= 120000
+        && (!('role' in data) || (data.role is string && data.role.size() <= 120))
+        && (!('location' in data) || (data.location is string && data.location.size() <= 120))
+        && (!('photo_alt' in data) || (data.photo_alt is string && data.photo_alt.size() <= 240))
+        && (!('sort_order' in data) || (data.sort_order is number))
+        && (!('is_active' in data) || (data.is_active is number))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlan(data) {
+      return data.keys().hasAll(['name', 'price', 'expected_return', 'duration', 'risk', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'name', 'price', 'expected_return', 'duration', 'risk', 'risk_level',
+          'description', 'image_url', 'image_alt', 'slots_left', 'status', 'badge',
+          'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 140
+        && data.price is number && data.price >= 0
+        && data.expected_return is number && data.expected_return >= 0
+        && data.duration is string && data.duration.size() >= 1 && data.duration.size() <= 60
+        && data.risk in ['Low', 'Medium', 'High']
+        && data.status in ['available', 'closed']
+        && (!('risk_level' in data) || (data.risk_level is number))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 800))
+        && (!('image_url' in data) || (data.image_url is string && data.image_url.size() <= 120000))
+        && (!('image_alt' in data) || (data.image_alt is string && data.image_alt.size() <= 240))
+        && (!('slots_left' in data) || (data.slots_left is number && data.slots_left >= 0))
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 60))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicCycle(data) {
+      return data.keys().hasAll(['name', 'contribution', 'payout_duration', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'name', 'contribution', 'payout_duration', 'description',
+          'image_url', 'image_alt', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 160
+        && data.contribution is number && data.contribution >= 0
+        && data.payout_duration is string && data.payout_duration.size() >= 1 && data.payout_duration.size() <= 80
+        && data.status is string && data.status.size() >= 1 && data.status.size() <= 40
+        && (!('description' in data) || (data.description is string && data.description.size() <= 800))
+        && (!('image_url' in data) || (data.image_url is string && data.image_url.size() <= 120000))
+        && (!('image_alt' in data) || (data.image_alt is string && data.image_alt.size() <= 240))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUpdate(data) {
+      return data.keys().hasAll(['title', 'category', 'excerpt', 'detail', 'published_date', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'title', 'category', 'excerpt', 'detail', 'image_url', 'image_alt',
+          'published_date', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.category in ['news', 'story', 'tip', 'event']
+        && data.excerpt is string && data.excerpt.size() >= 1 && data.excerpt.size() <= 400
+        && data.detail is string && data.detail.size() >= 1 && data.detail.size() <= 5000
+        && data.published_date is string && data.published_date.size() >= 4 && data.published_date.size() <= 30
+        && data.status in ['published', 'draft']
+        && (!('image_url' in data) || (data.image_url is string && data.image_url.size() <= 120000))
+        && (!('image_alt' in data) || (data.image_alt is string && data.image_alt.size() <= 240))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['name', 'phone', 'balance', 'total_invested', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'name', 'phone', 'email', 'uid', 'group_name', 'balance', 'total_invested',
+          'status', 'pass_hash', 'cred_hash', 'age_verified', 'guardian_name', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 140
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 40
+        && data.balance is number
+        && data.total_invested is number
+        && data.status in ['active', 'pending', 'suspended']
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('group_name' in data) || (data.group_name is string && data.group_name.size() <= 140))
+        && (!('pass_hash' in data) || (data.pass_hash is string && data.pass_hash.size() <= 128))
+        && (!('cred_hash' in data) || (data.cred_hash is string && data.cred_hash.size() <= 128))
+        && (!('age_verified' in data) || (data.age_verified is number))
+        && (!('guardian_name' in data) || (data.guardian_name is string && data.guardian_name.size() <= 140))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLedger(data) {
+      return data.keys().hasAll(['memberId', 'record_type', 'title', 'amount', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'memberId', 'member_phone', 'member_email', 'member_name', 'ownerUid',
+          'record_type', 'title', 'amount', 'expected_return', 'duration',
+          'interest_rate', 'purpose', 'number_of_members', 'date_str', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.memberId)
+        && data.record_type in ['investment', 'savings', 'loan', 'cycle']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 180
+        && data.amount is number
+        && data.status is string && data.status.size() >= 1 && data.status.size() <= 40
+        && (!('member_phone' in data) || (data.member_phone is string && data.member_phone.size() <= 40))
+        && (!('member_email' in data) || (data.member_email is string && data.member_email.size() <= 160))
+        && (!('member_name' in data) || (data.member_name is string && data.member_name.size() <= 140))
+        && (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128))
+        && (!('expected_return' in data) || (data.expected_return is number))
+        && (!('duration' in data) || (data.duration is string && data.duration.size() <= 80))
+        && (!('interest_rate' in data) || (data.interest_rate is string && data.interest_rate.size() <= 40))
+        && (!('purpose' in data) || (data.purpose is string && data.purpose.size() <= 240))
+        && (!('number_of_members' in data) || (data.number_of_members is number))
+        && (!('date_str' in data) || (data.date_str is string && data.date_str.size() <= 40))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSnapshotArray(arr) {
+      return arr is list && arr.size() <= 50 && (arr.size() == 0 || arr[0] is map);
+    }
+
+    function isValidMemberPortalSnapshot(data) {
+      return data.keys().hasAll([
+          'memberId', 'display_name', 'balance', 'total_invested',
+          'status', 'investments', 'savings', 'loans', 'cycles', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'memberId', 'display_name', 'group_name', 'balance', 'total_invested',
+          'status', 'investments', 'savings', 'loans', 'cycles', 'updatedAt'
+        ])
+        && isValidId(data.memberId)
+        && data.display_name is string && data.display_name.size() >= 1 && data.display_name.size() <= 140
+        && (!('group_name' in data) || (data.group_name is string && data.group_name.size() <= 140))
+        && data.balance is number
+        && data.total_invested is number
+        && data.status in ['active', 'pending', 'suspended']
+        && isValidSnapshotArray(data.investments)
+        && isValidSnapshotArray(data.savings)
+        && isValidSnapshotArray(data.loans)
+        && isValidSnapshotArray(data.cycles)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidServiceRequest(data) {
+      return data.keys().hasAll(['request_type', 'applicant_name', 'applicant_phone', 'age_confirmed', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'request_type', 'applicant_name', 'applicant_phone', 'details',
+          'age_confirmed', 'guardian_name', 'status', 'submitterUid', 'createdAt', 'updatedAt'
+        ])
+        && data.request_type in ['investment', 'savings', 'cycle', 'loan']
+        && data.applicant_name is string && data.applicant_name.size() >= 1 && data.applicant_name.size() <= 140
+        && data.applicant_phone is string && data.applicant_phone.size() >= 6 && data.applicant_phone.size() <= 40
+        && data.age_confirmed == 1
+        && data.status in ['pending', 'reviewed', 'approved', 'declined']
+        && (!('details' in data) || (data.details is map && data.details.size() <= 12))
+        && (!('guardian_name' in data) || (data.guardian_name is string && data.guardian_name.size() <= 140))
+        && (!('submitterUid' in data) || (data.submitterUid is string && data.submitterUid.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDeletionRequest(data) {
+      return data.keys().hasAll(['full_name', 'phone', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['full_name', 'phone', 'email', 'reason', 'status', 'submitterUid', 'createdAt', 'updatedAt'])
+        && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 140
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 40
+        && data.status in ['pending', 'completed', 'rejected']
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('reason' in data) || (data.reason is string && data.reason.size() <= 1000))
+        && (!('submitterUid' in data) || (data.submitterUid is string && data.submitterUid.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Startup connection check document
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+    }
+
+    // Authorized Admin Registry
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && isVerifiedUser() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(uid) && isValidAdmin(incoming())
+        && incoming().uid == uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && ((isBootstrappedAdminEmail() && request.auth.uid == uid) || isAdmin());
+      allow update: if isValidId(uid) && isAdmin() && isValidAdmin(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(uid) && isAdmin() && request.auth.uid != uid;
+    }
+
+    // Public Website Settings
+    match /site_settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if true;
+      allow create: if isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    // Public Hero Slides
+    match /hero_slides/{slideId} {
+      allow get: if isValidId(slideId);
+      allow list: if true;
+      allow create: if isValidId(slideId) && isAdmin() && isValidHeroSlide(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(slideId) && isAdmin() && isValidHeroSlide(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(slideId) && isAdmin();
+    }
+
+    // Public Testimonials
+    match /testimonials/{testimonialId} {
+      allow get: if isValidId(testimonialId);
+      allow list: if true;
+      allow create: if isValidId(testimonialId) && isAdmin() && isValidTestimonial(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(testimonialId) && isAdmin() && isValidTestimonial(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(testimonialId) && isAdmin();
+    }
+
+    // Public Investment Plans
+    match /investment_plans/{planId} {
+      allow get: if isValidId(planId);
+      allow list: if true;
+      allow create: if isValidId(planId) && isAdmin() && isValidPlan(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(planId) && isAdmin() && isValidPlan(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(planId) && isAdmin();
+    }
+
+    // Public Savings Cycles
+    match /public_cycles/{cycleId} {
+      allow get: if isValidId(cycleId);
+      allow list: if true;
+      allow create: if isValidId(cycleId) && isAdmin() && isValidPublicCycle(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(cycleId) && isAdmin() && isValidPublicCycle(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(cycleId) && isAdmin();
+    }
+
+    // Public News & Updates
+    match /updates/{updateId} {
+      allow get: if isValidId(updateId);
+      allow list: if true;
+      allow create: if isValidId(updateId) && isAdmin() && isValidUpdate(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(updateId) && isAdmin() && isValidUpdate(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(updateId) && isAdmin();
+    }
+
+    // Private Member Profiles (Strict PII Isolation)
+    match /members/{memberId} {
+      allow get: if isValidId(memberId) && (
+        isAdmin() ||
+        (isVerifiedUser() && (
+          existing().uid == request.auth.uid ||
+          ('email' in existing() && existing().email != '' && existing().email == request.auth.token.email)
+        ))
+      );
+      allow list: if isAdmin() || (isVerifiedUser() && (
+        resource.data.uid == request.auth.uid ||
+        (resource.data.email != '' && resource.data.email == request.auth.token.email)
+      ));
+      allow create: if isValidId(memberId) && isAdmin() && isValidMember(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(memberId) && isValidMember(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (isVerifiedUser()
+            && 'email' in existing()
+            && existing().email != ''
+            && existing().email == request.auth.token.email
+            && incoming().uid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'updatedAt']))
+        );
+      allow delete: if isValidId(memberId) && isAdmin();
+    }
+
+    // Member Ledgers (Investments, Savings, Loans, Cycles)
+    match /member_ledgers/{ledgerId} {
+      allow get: if isValidId(ledgerId) && (
+        isAdmin() ||
+        (isVerifiedUser() && (
+          ('ownerUid' in existing() && existing().ownerUid == request.auth.uid) ||
+          ('member_email' in existing() && existing().member_email != '' && existing().member_email == request.auth.token.email)
+        ))
+      );
+      allow list: if isAdmin() || (
+        isVerifiedUser() && (
+          resource.data.ownerUid == request.auth.uid ||
+          resource.data.member_email == request.auth.token.email
+        )
+      );
+      allow create: if isValidId(ledgerId) && isAdmin() && isValidLedger(incoming())
+        && exists(/databases/$(database)/documents/members/$(incoming().memberId))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(ledgerId) && isAdmin() && isValidLedger(incoming())
+        && incoming().memberId == existing().memberId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(ledgerId) && isAdmin();
+    }
+
+    // Zero-PII Member Portal Snapshot (Keyed by 64-char SHA-256 of phone + "::" + password; listing strictly admin-only)
+    match /member_portals/{credHash} {
+      allow get: if isValidSha256Hex(credHash);
+      allow list: if isAdmin();
+      allow create, update: if isValidSha256Hex(credHash) && isAdmin() && isValidMemberPortalSnapshot(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidSha256Hex(credHash) && isAdmin();
+    }
+
+    // Public Service Requests (Write-only for visitors; read/update/delete strictly Admin-only)
+    match /service_requests/{requestId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(requestId) && isValidServiceRequest(incoming())
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId) && isAdmin() && isValidServiceRequest(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    // Privacy & Data Deletion Requests
+    match /deletion_requests/{requestId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(requestId) && isValidDeletionRequest(incoming())
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId) && isAdmin() && isValidDeletionRequest(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+  }
+}

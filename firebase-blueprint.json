@@ -1,0 +1,296 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized SHIMOGY operations administrator document keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "role": { "type": "string", "enum": ["admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "createdAt", "updatedAt"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Public business details, metrics, story, and daily Quick Updates ticker banner.",
+      "type": "object",
+      "properties": {
+        "company_name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "short_name": { "type": "string", "maxLength": 60 },
+        "slogan": { "type": "string", "maxLength": 180 },
+        "registration_info": { "type": "string", "maxLength": 240 },
+        "phone_primary": { "type": "string", "maxLength": 40 },
+        "phone_secondary": { "type": "string", "maxLength": 40 },
+        "whatsapp_number": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "address": { "type": "string", "maxLength": 220 },
+        "working_hours": { "type": "string", "maxLength": 180 },
+        "social_facebook": { "type": "string", "maxLength": 300 },
+        "social_tiktok": { "type": "string", "maxLength": 300 },
+        "social_youtube": { "type": "string", "maxLength": 300 },
+        "social_instagram": { "type": "string", "maxLength": 300 },
+        "logo_url": { "type": "string", "maxLength": 120000 },
+        "about_mission": { "type": "string", "maxLength": 1200 },
+        "about_vision": { "type": "string", "maxLength": 1200 },
+        "about_story": { "type": "string", "maxLength": 3000 },
+        "stats_members": { "type": "string", "maxLength": 40 },
+        "stats_capital": { "type": "string", "maxLength": 40 },
+        "stats_years": { "type": "string", "maxLength": 40 },
+        "stats_hours": { "type": "string", "maxLength": 80 },
+        "risk_disclosure": { "type": "string", "maxLength": 1500 },
+        "age_consent_policy": { "type": "string", "maxLength": 1500 },
+        "quick_updates_ticker": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["company_name", "updatedAt"]
+    },
+    "HeroSlide": {
+      "title": "HeroSlide",
+      "description": "Homepage carousel slide with image, headline, subtitle, and CTA link.",
+      "type": "object",
+      "properties": {
+        "badge_text": { "type": "string", "maxLength": 140 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "cta_text": { "type": "string", "maxLength": 80 },
+        "cta_link": { "type": "string", "maxLength": 240 },
+        "image_url": { "type": "string", "minLength": 1, "maxLength": 120000 },
+        "image_alt": { "type": "string", "maxLength": 240 },
+        "sort_order": { "type": "number" },
+        "is_active": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "subtitle", "image_url", "createdAt", "updatedAt"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Verified investor quote displayed in What Our Investors Say.",
+      "type": "object",
+      "properties": {
+        "client_name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "role": { "type": "string", "maxLength": 120 },
+        "location": { "type": "string", "maxLength": 120 },
+        "quote": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "photo_url": { "type": "string", "minLength": 1, "maxLength": 120000 },
+        "photo_alt": { "type": "string", "maxLength": 240 },
+        "sort_order": { "type": "number" },
+        "is_active": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["client_name", "quote", "photo_url", "createdAt", "updatedAt"]
+    },
+    "InvestmentPlan": {
+      "title": "InvestmentPlan",
+      "description": "Publicly listed enterprise investment slot offering.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "price": { "type": "number" },
+        "expected_return": { "type": "number" },
+        "duration": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "risk": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "risk_level": { "type": "number" },
+        "description": { "type": "string", "maxLength": 800 },
+        "image_url": { "type": "string", "maxLength": 120000 },
+        "image_alt": { "type": "string", "maxLength": 240 },
+        "slots_left": { "type": "number" },
+        "status": { "type": "string", "enum": ["available", "closed"] },
+        "badge": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "expected_return", "duration", "risk", "status", "createdAt", "updatedAt"]
+    },
+    "PublicCycle": {
+      "title": "PublicCycle",
+      "description": "Public savings cycle offering published on cycles.html.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "contribution": { "type": "number" },
+        "payout_duration": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 800 },
+        "image_url": { "type": "string", "maxLength": 120000 },
+        "image_alt": { "type": "string", "maxLength": 240 },
+        "status": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "contribution", "payout_duration", "status", "createdAt", "updatedAt"]
+    },
+    "CompanyUpdate": {
+      "title": "CompanyUpdate",
+      "description": "Published news, financial tip, story, or event article.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["news", "story", "tip", "event"] },
+        "excerpt": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "detail": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "image_url": { "type": "string", "maxLength": 120000 },
+        "image_alt": { "type": "string", "maxLength": 240 },
+        "published_date": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "enum": ["published", "draft"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "excerpt", "detail", "published_date", "status", "createdAt", "updatedAt"]
+    },
+    "MemberProfile": {
+      "title": "MemberProfile",
+      "description": "Private SHIMOGY member profile protected by owner/admin isolation.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "phone": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "group_name": { "type": "string", "maxLength": 140 },
+        "balance": { "type": "number" },
+        "total_invested": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "pass_hash": { "type": "string", "maxLength": 128 },
+        "cred_hash": { "type": "string", "maxLength": 128 },
+        "age_verified": { "type": "number" },
+        "guardian_name": { "type": "string", "maxLength": 140 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "balance", "total_invested", "status", "createdAt", "updatedAt"]
+    },
+    "MemberLedger": {
+      "title": "MemberLedger",
+      "description": "Member investment, savings, loan, or cycle ledger item.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "member_phone": { "type": "string", "maxLength": 40 },
+        "member_email": { "type": "string", "maxLength": 160 },
+        "member_name": { "type": "string", "maxLength": 140 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "record_type": { "type": "string", "enum": ["investment", "savings", "loan", "cycle"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "amount": { "type": "number" },
+        "expected_return": { "type": "number" },
+        "duration": { "type": "string", "maxLength": 80 },
+        "interest_rate": { "type": "string", "maxLength": 40 },
+        "purpose": { "type": "string", "maxLength": 240 },
+        "number_of_members": { "type": "number" },
+        "date_str": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "record_type", "title", "amount", "status", "createdAt", "updatedAt"]
+    },
+    "MemberPortalSnapshot": {
+      "title": "MemberPortalSnapshot",
+      "description": "Zero-PII member portal summary keyed by SHA-256(phone::passcode) for cross-device phone+password sign-in without exposing phone/email or allowing collection listing.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "group_name": { "type": "string", "maxLength": 140 },
+        "balance": { "type": "number" },
+        "total_invested": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "investments": { "type": "array" },
+        "savings": { "type": "array" },
+        "loans": { "type": "array" },
+        "cycles": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "display_name", "balance", "total_invested", "status", "investments", "savings", "loans", "cycles", "updatedAt"]
+    },
+    "ServiceRequest": {
+      "title": "ServiceRequest",
+      "description": "Submitted public request for investment slot, savings account, cycle proposal, or loan.",
+      "type": "object",
+      "properties": {
+        "request_type": { "type": "string", "enum": ["investment", "savings", "cycle", "loan"] },
+        "applicant_name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "applicant_phone": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "details": { "type": "object" },
+        "age_confirmed": { "type": "number" },
+        "guardian_name": { "type": "string", "maxLength": 140 },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "approved", "declined"] },
+        "submitterUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["request_type", "applicant_name", "applicant_phone", "age_confirmed", "status", "createdAt", "updatedAt"]
+    },
+    "DeletionRequest": {
+      "title": "DeletionRequest",
+      "description": "Submitted privacy & personal data deletion request.",
+      "type": "object",
+      "properties": {
+        "full_name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "phone": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "submitterUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["full_name", "phone", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Authorized admin identities verified against Firebase Auth UID and verified email."
+    },
+    "/site_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Public site configuration and Quick Updates ticker."
+    },
+    "/hero_slides/{slideId}": {
+      "schema": { "$ref": "#/entities/HeroSlide" },
+      "description": "Homepage hero carousel slides."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": { "$ref": "#/entities/Testimonial" },
+      "description": "Published investor testimonials."
+    },
+    "/investment_plans/{planId}": {
+      "schema": { "$ref": "#/entities/InvestmentPlan" },
+      "description": "Public enterprise investment plans."
+    },
+    "/public_cycles/{cycleId}": {
+      "schema": { "$ref": "#/entities/PublicCycle" },
+      "description": "Public savings cycle listings."
+    },
+    "/updates/{updateId}": {
+      "schema": { "$ref": "#/entities/CompanyUpdate" },
+      "description": "News, stories, tips, and event articles."
+    },
+    "/members/{memberId}": {
+      "schema": { "$ref": "#/entities/MemberProfile" },
+      "description": "Private member profiles accessible only by admin or owning verified member."
+    },
+    "/member_ledgers/{ledgerId}": {
+      "schema": { "$ref": "#/entities/MemberLedger" },
+      "description": "Member financial ledger records isolated to admin or owning member."
+    },
+    "/member_portals/{credHash}": {
+      "schema": { "$ref": "#/entities/MemberPortalSnapshot" },
+      "description": "Zero-PII member summary snapshot keyed by 64-char SHA-256 credential hash."
+    },
+    "/service_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/ServiceRequest" },
+      "description": "Public service intake requests readable and manageable by admins only."
+    },
+    "/deletion_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/DeletionRequest" },
+      "description": "Privacy data deletion requests readable and manageable by admins only."
+    }
+  }
+}
