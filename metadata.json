@@ -1,0 +1,6 @@
+{
+  "name": "SHIMOGY Investment Group",
+  "description": "Smart investments, community savings cycles, savings accounts, and member financing in Kawempe, Kampala, Uganda.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

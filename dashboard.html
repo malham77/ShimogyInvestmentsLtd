@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Portal | SHIMOGY Investment Group Ltd</title>
+  <meta name="description" content="Secure member account portal for SHIMOGY Investment Group Ltd clients to view investments, Current and Fixed savings accounts, loans, and cycles." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <a href="index.html" class="brand-link" aria-label="SHIMOGY Investment Group Home">
+        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
+        <span>SHIMOGY</span>
+      </a>
+      <button type="button" id="mobileMenuBtn" class="mobile-menu-btn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="primaryNav">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <nav id="primaryNav" class="primary-nav" aria-label="Main navigation">
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="index.html" class="nav-top-link">Home</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Home sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="index.html">Homepage Overview</a></li>
+            <li><a href="index.html#trendingHeading">Trending Investment Plans</a></li>
+            <li><a href="index.html#howToInvestHeading">How to Invest Smart</a></li>
+            <li><a href="index.html#metricsHeading">Organization Overview</a></li>
+            <li><a href="index.html#testimonialsHeading">What Our Investors Say</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="investments.html" class="nav-top-link">Investments</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Investments sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="investments.html">All Investment Plans</a></li>
+            <li><a href="investments.html?risk=Low">Low Risk Ventures</a></li>
+            <li><a href="investments.html?risk=Medium">Medium Risk Ventures</a></li>
+            <li><a href="investments.html?risk=High">High Risk Ventures</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="cycles.html" class="nav-top-link">Cycles</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Cycles sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="cycles.html#activeCyclesHeading">Active Savings Cycles</a></li>
+            <li><a href="cycles.html#howCyclesHeading">How Cycles Work</a></li>
+            <li><a href="cycles.html#proposeCycleHeading">Propose a New Cycle</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="savings.html" class="nav-top-link">Savings</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Savings sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="savings.html#accountTypesHeading">Current &amp; Fixed Accounts</a></li>
+            <li><a href="savings.html#howOpenHeading">How to Open Account</a></li>
+            <li><a href="savings.html#whySaveHeading">Why Save With Us</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="loans.html" class="nav-top-link">Loans</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Loans sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="loans.html#loanTiersHeading">Loan Brackets (50K - 2M)</a></li>
+            <li><a href="loans.html#loanEligibilityHeading">Eligibility Criteria</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="updates.html" class="nav-top-link">Updates</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="Updates sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="updates.html">Top Story &amp; All News</a></li>
+            <li><a href="updates.html?cat=story">Success Stories</a></li>
+            <li><a href="updates.html?cat=news">Company News</a></li>
+            <li><a href="updates.html?cat=tip">Investment Tips</a></li>
+            <li><a href="updates.html?cat=event">Events</a></li>
+          </ul>
+        </div>
+
+        <div class="nav-item">
+          <div class="nav-link-wrap">
+            <a href="about.html" class="nav-top-link">About Us</a>
+            <button type="button" class="nav-dropdown-toggle" aria-label="About sections" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <ul class="nav-dropdown-menu">
+            <li><a href="about.html#storyHeading">Our Story &amp; Mission</a></li>
+            <li><a href="about.html#valuesHeading">Core Values</a></li>
+            <li><a href="about.html#officeDetailsHeading">Kampala Office &amp; Map</a></li>
+          </ul>
+        </div>
+      </nav>
+      <div class="header-actions">
+        <a href="https://wa.me/256752259416" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp btn-sm wa-direct-link">WhatsApp Us</a>
+        <a href="dashboard.html" class="btn btn-primary btn-sm" aria-current="page">Client Portal</a>
+        <button type="button" id="memberLogoutBtn" class="btn btn-outline btn-sm" style="display:none;">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content" tabindex="-1" style="flex:1;background-color:var(--bg-subtle);">
+    <!-- Login Gate -->
+    <section id="memberLoginSection" class="section">
+      <div class="container" style="max-width:480px;">
+        <div class="form-card">
+          <span class="eyebrow-text">Member Access</span>
+          <h1 style="font-size:1.85rem;margin-bottom:8px;">Client Portal Sign In</h1>
+          <p style="color:var(--text-muted);font-size:0.92rem;margin-bottom:22px;">
+            Enter your registered phone number and account password provided by our Kampala Operations Team.
+          </p>
+
+          <form id="memberLoginForm">
+            <div class="form-field">
+              <label for="memberPhoneInput">Registered Phone Number</label>
+              <input type="tel" id="memberPhoneInput" required placeholder="0752259416" autocomplete="tel" />
+            </div>
+            <div class="form-field">
+              <label for="memberPasswordInput">Password</label>
+              <input type="password" id="memberPasswordInput" required placeholder="Enter your password" autocomplete="current-password" />
+            </div>
+            <div id="memberLoginFeedback" role="status" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary btn-full">Sign In to Portfolio</button>
+          </form>
+
+          <div class="alert-box alert-info" style="margin-top:18px;font-size:0.84rem;">
+            Need onboarding assistance? Visit our Kawempe Tula office, call +256 752 259 416, or message our team directly via WhatsApp.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Authenticated Member Workspace -->
+    <section id="memberPortalSection" class="section" style="display:none;padding-top:36px;">
+      <div class="container">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:28px;">
+          <div>
+            <span class="eyebrow-text">Verified Client Ledger</span>
+            <h1 id="portalWelcomeTitle" style="font-size:2rem;">Welcome</h1>
+            <p id="portalMemberMeta" style="color:var(--text-muted);font-size:0.92rem;"></p>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button type="button" id="openChangePassBtn" class="btn btn-outline btn-sm">Change Password</button>
+            <button type="button" id="openMemberDelBtn" class="btn btn-danger btn-sm">Request Data Deletion</button>
+            <button type="button" id="refreshPortalBtn" class="btn btn-primary btn-sm">Refresh Records</button>
+          </div>
+        </div>
+
+        <!-- KPI Strip -->
+        <div class="kpi-strip" style="margin-bottom:28px;">
+          <div class="kpi-box">
+            <div class="kpi-num tabular-nums" id="kpiTotalInvested">UGX 0</div>
+            <div class="kpi-label">Total Invested Capital</div>
+          </div>
+          <div class="kpi-box accent-emerald">
+            <div class="kpi-num tabular-nums" id="kpiAccountBalance">UGX 0</div>
+            <div class="kpi-label">Account &amp; Savings Balance</div>
+          </div>
+          <div class="kpi-box accent-sky">
+            <div class="kpi-num tabular-nums" id="kpiActivePlans">0</div>
+            <div class="kpi-label">Recorded Investment Plans</div>
+          </div>
+          <div class="kpi-box accent-amber">
+            <div class="kpi-num tabular-nums" id="kpiActiveLoans">0</div>
+            <div class="kpi-label">Member Loans on Record</div>
+          </div>
+        </div>
+
+        <!-- Portfolio Visual Analytics: Pie/Doughnut & Bar Chart -->
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div>
+              <h3>Portfolio Capital Allocation</h3>
+              <p class="chart-sub">Distribution across your investments, savings balances, cycle contributions, and active loans.</p>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="memberPortfolioPie" aria-label="Portfolio Allocation Pie Chart" role="img"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div>
+              <h3>Investment Capital vs Projected Payouts</h3>
+              <p class="chart-sub">Side-by-side comparison of committed funds and estimated cycle returns.</p>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="memberPlansBar" aria-label="Investment Plans Bar Chart" role="img"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- My Investments -->
+        <div class="panel-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <h2 style="margin-bottom:0;">My Investment Plans</h2>
+            <a href="investments.html" class="btn btn-outline btn-sm">Explore More Plans</a>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Investment Plan</th>
+                  <th>Capital Amount</th>
+                  <th>Expected Return</th>
+                  <th>Duration</th>
+                  <th>Status</th>
+                  <th>Date Recorded</th>
+                </tr>
+              </thead>
+              <tbody id="memberInvestmentsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- My Savings -->
+        <div class="panel-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <h2 style="margin-bottom:0;">My Savings Accounts</h2>
+            <a href="savings.html" class="btn btn-outline btn-sm">Open Savings Account</a>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Account Type</th>
+                  <th>Balance</th>
+                  <th>Open Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="memberSavingsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- My Loans -->
+        <div class="panel-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <h2 style="margin-bottom:0;">My Loans</h2>
+            <a href="loans.html" class="btn btn-outline btn-sm">Apply for Loan</a>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Loan Amount</th>
+                  <th>Purpose</th>
+                  <th>Repayment Duration</th>
+                  <th>Interest Rate</th>
+                  <th>Status</th>
+                  <th>Request Date</th>
+                </tr>
+              </thead>
+              <tbody id="memberLoansBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- My Savings Cycles -->
+        <div class="panel-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <h2 style="margin-bottom:0;">My Savings Cycles</h2>
+            <a href="cycles.html" class="btn btn-outline btn-sm">View Public Cycles</a>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cycle Name</th>
+                  <th>Contribution</th>
+                  <th>Pay Out Duration</th>
+                  <th>Members</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="memberCyclesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Latest Company Bulletins -->
+        <div class="panel-card">
+          <h2>Latest SHIMOGY Updates</h2>
+          <div id="portalUpdatesList" class="clean-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Change Password Modal -->
+  <div id="changePassModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="changePassTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="changePassTitle">Change Account Password</h3>
+        <button type="button" id="closeChangePassModal" class="modal-close-btn" aria-label="Close modal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="memberChangePassForm">
+        <div class="form-field">
+          <label for="curMemberPass">Current Password</label>
+          <input type="password" id="curMemberPass" required autocomplete="current-password" />
+        </div>
+        <div class="form-field">
+          <label for="newMemberPass">New Password (minimum 4 characters)</label>
+          <input type="password" id="newMemberPass" minlength="4" required autocomplete="new-password" />
+        </div>
+        <div id="changePassFeedback" role="status" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary btn-full">Update Password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Member Data Deletion Request Modal -->
+  <div id="memberDelModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="memberDelTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="memberDelTitle">Request Data Deletion</h3>
+        <button type="button" id="closeMemberDelModal" class="modal-close-btn" aria-label="Close modal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <p style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:14px;">
+        Submitting this request notifies the SHIMOGY Compliance Team to verify active balances and permanently remove your portal records within 72 hours.
+      </p>
+      <form id="memberDelForm">
+        <div class="form-field">
+          <label for="memDelReason">Reason / Additional Notes</label>
+          <textarea id="memDelReason" placeholder="Optional reason for account removal"></textarea>
+        </div>
+        <div id="memDelFeedback" role="status" aria-live="polite"></div>
+        <button type="submit" class="btn btn-danger btn-full">Submit Deletion Request</button>
+      </form>
+    </div>
+  </div>
+
+  <a href="https://wa.me/256752259416" target="_blank" rel="noopener noreferrer" class="whatsapp-float wa-direct-link" aria-label="Chat directly with SHIMOGY on WhatsApp">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.54 15.2L2 22l4.94-1.3A10 10 0 1 0 12 2zm5.47 14.12c-.23.64-1.33 1.22-1.84 1.29-.47.07-1.07.1-1.73-.11-.4-.13-.91-.3-1.57-.58-2.76-1.19-4.56-3.97-4.7-4.15-.14-.18-1.12-1.49-1.12-2.85 0-1.36.71-2.03.96-2.31.25-.27.55-.34.73-.34h.53c.17 0 .4-.06.62.47.23.55.78 1.91.85 2.05.07.14.11.3.02.48-.09.18-.14.3-.27.46-.14.16-.29.36-.41.48-.14.14-.28.29-.12.56.16.27.71 1.17 1.53 1.9 1.05.94 1.94 1.23 2.21 1.37.27.14.43.11.59-.07.16-.18.68-.79.86-1.06.18-.27.36-.23.61-.14.25.09 1.6.76 1.87.89.27.14.45.21.52.32.07.11.07.66-.16 1.3z"/></svg>
+    <span>WhatsApp Us</span>
+  </a>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container">
+      <div class="footer-bottom" style="padding-top:0;border-top:none;">
+        <span>&copy; 2026 SHIMOGY Investment Group Ltd · Kawempe Tula, Kampala, Uganda · +256 752 259 416</span>
+        <div class="footer-legal-links">
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
+          <a href="refund.html">Refunds</a>
+          <a href="cookies.html">Cookies</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/site.js"></script>
+  <script src="/js/chart.umd.min.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Operations Console | SHIMOGY Investment Group</title>
+  <meta name="description" content="Operations Team administration console for managing SHIMOGY website content, members, investments, savings, loans, cycles, and requests." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <a href="#adminMain" class="skip-link">Skip to main workspace</a>
+
+  <!-- Admin Login Gate -->
+  <div id="adminLoginView" style="min-height:100vh;background:linear-gradient(155deg, var(--navy-950) 0%, var(--navy-900) 60%, var(--navy-700) 100%);display:flex;align-items:center;justify-content:center;padding:24px;">
+    <div class="form-card" style="max-width:440px;width:100%;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="46" height="46" style="object-fit:contain;border-radius:8px;border:1px solid var(--border-light);" />
+        <div>
+          <h1 style="font-size:1.55rem;margin-bottom:2px;">SHIMOGY Admin</h1>
+          <p style="font-size:0.82rem;color:var(--text-muted);">Operations Team Console</p>
+        </div>
+      </div>
+
+      <form id="adminLoginForm">
+        <div class="form-field">
+          <label for="adminEmailInput">Administrator Email</label>
+          <input type="email" id="adminEmailInput" required placeholder="Enter administrator email" autocomplete="username" />
+        </div>
+        <div class="form-field">
+          <label for="adminPasswordInput">Password</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="adminPasswordInput" required placeholder="Enter administrator password" autocomplete="current-password" style="flex:1;" />
+            <button type="button" id="toggleAdminPassBtn" class="btn btn-outline btn-sm" aria-pressed="false" style="min-height:44px;">Show</button>
+          </div>
+        </div>
+        <div id="adminLoginFeedback" role="status" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary btn-full">Sign In to Console</button>
+      </form>
+
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;font-size:0.84rem;">
+        <a href="index.html" style="color:var(--blue-primary);text-decoration:none;font-weight:600;">Return to Public Website</a>
+        <a href="dashboard.html" style="color:var(--text-muted);text-decoration:none;">Client Portal</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authenticated Admin Workspace with Persistent Sidebar -->
+  <div id="adminWorkspaceView" class="dashboard-shell" style="display:none;">
+    <aside id="adminSidebar" class="admin-sidebar" aria-label="Admin Navigation Sidebar">
+      <div class="sidebar-brand">
+        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="40" height="40" />
+        <div>
+          <div class="sidebar-brand-title">SHIMOGY</div>
+          <div class="sidebar-brand-sub">Operations Console</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" role="navigation" aria-label="Dashboard Sections">
+        <div class="sidebar-group-label">Overview</div>
+        <button type="button" class="sidebar-link active" data-tab="tab-overview">Dashboard Overview</button>
+
+        <div class="sidebar-group-label">Website Content CMS</div>
+        <button type="button" class="sidebar-link" data-tab="tab-settings">Business &amp; Site Settings</button>
+        <button type="button" class="sidebar-link" data-tab="tab-hero">Hero Slides Manager</button>
+        <button type="button" class="sidebar-link" data-tab="tab-testimonials">Investor Testimonials</button>
+
+        <div class="sidebar-group-label">Public Offerings</div>
+        <button type="button" class="sidebar-link" data-tab="tab-plans">Investment Plans &amp; Slots</button>
+        <button type="button" class="sidebar-link" data-tab="tab-public-cycles">Active Public Cycles</button>
+        <button type="button" class="sidebar-link" data-tab="tab-updates">News &amp; Updates</button>
+
+        <div class="sidebar-group-label">Members &amp; Ledgers</div>
+        <button type="button" class="sidebar-link" data-tab="tab-members">Members Directory</button>
+        <button type="button" class="sidebar-link" data-tab="tab-create-member">Create New Member</button>
+        <button type="button" class="sidebar-link" data-tab="tab-finance">Add Investments / Savings / Loans / Cycles</button>
+
+        <div class="sidebar-group-label">Requests &amp; Security</div>
+        <button type="button" class="sidebar-link" data-tab="tab-requests">Client Service Requests</button>
+        <button type="button" class="sidebar-link" data-tab="tab-deletion">Data Deletion Requests</button>
+        <button type="button" class="sidebar-link" data-tab="tab-account">Admin Account Security</button>
+      </nav>
+    </aside>
+
+    <div class="dashboard-main">
+      <header class="dashboard-topbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button type="button" id="sidebarToggleBtn" class="mobile-menu-btn" aria-label="Toggle admin sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <h2 id="activeTabTitle" style="font-size:1.15rem;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;">Dashboard Overview</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="index.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">View Public Site</a>
+          <button type="button" id="adminRefreshBtn" class="btn btn-outline btn-sm">Reload Data</button>
+          <button type="button" id="adminLogoutBtn" class="btn btn-primary btn-sm">Sign Out</button>
+        </div>
+      </header>
+
+      <main id="adminMain" class="dashboard-content" tabindex="-1">
+        <div id="globalAdminToast" role="status" aria-live="polite"></div>
+
+        <!-- TAB 1: Overview -->
+        <section id="tab-overview" class="tab-panel active">
+          <div class="kpi-strip" style="margin-bottom:24px;">
+            <div class="kpi-box"><div class="kpi-num tabular-nums" id="ovMembersCount">0</div><div class="kpi-label">Registered Members</div></div>
+            <div class="kpi-box accent-sky"><div class="kpi-num tabular-nums" id="ovPlansCount">0</div><div class="kpi-label">Public Investment Plans</div></div>
+            <div class="kpi-box accent-emerald"><div class="kpi-num tabular-nums" id="ovCyclesCount">0</div><div class="kpi-label">Active Public Cycles</div></div>
+            <div class="kpi-box accent-amber"><div class="kpi-num tabular-nums" id="ovPendingReqCount">0</div><div class="kpi-label">Pending Service Requests</div></div>
+          </div>
+
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div>
+                <h3>Platform Portfolio Mix</h3>
+                <p class="chart-sub">Total member investments, savings deposits, active loans, and cycle contributions (UGX).</p>
+              </div>
+              <div class="chart-canvas-wrap">
+                <canvas id="adminFundsPie" aria-label="Platform Portfolio Pie Chart" role="img"></canvas>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div>
+                <h3>Client Service Requests by Category</h3>
+                <p class="chart-sub">Volume of incoming requests across investments, savings, cycles, and loans.</p>
+              </div>
+              <div class="chart-canvas-wrap">
+                <canvas id="adminRequestsBar" aria-label="Client Service Requests Bar Chart" role="img"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="two-col-grid">
+            <div class="panel-card">
+              <h3>Recent Member Investments</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
+                  <tbody id="ovRecentInvBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel-card">
+              <h3>Recent Pending Service Requests</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Applicant</th><th>Type</th><th>Status</th><th>Date</th></tr></thead>
+                  <tbody id="ovRecentReqBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: Business & Site Settings -->
+        <section id="tab-settings" class="tab-panel">
+          <div class="panel-card">
+            <h2>Business Details &amp; Site-Wide Settings</h2>
+            <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:18px;">Changes saved here update the homepage metrics, logo crest, footer contacts, social links, and About Us profile across the entire website.</p>
+            <form id="settingsForm">
+              <div class="form-grid">
+                <div class="form-field"><label for="setCompanyName">Company Legal Name</label><input type="text" id="setCompanyName" required /></div>
+                <div class="form-field"><label for="setSlogan">Brand Slogan</label><input type="text" id="setSlogan" /></div>
+                <div class="form-field"><label for="setRegInfo">Registration Subtitle</label><input type="text" id="setRegInfo" /></div>
+                <div class="form-field"><label for="setAddress">Physical Office Address</label><input type="text" id="setAddress" /></div>
+                <div class="form-field"><label for="setPhonePrimary">Primary Phone</label><input type="text" id="setPhonePrimary" /></div>
+                <div class="form-field"><label for="setPhoneSecondary">Secondary Phone</label><input type="text" id="setPhoneSecondary" /></div>
+                <div class="form-field"><label for="setWhatsapp">WhatsApp Number (digits only, e.g. 256752259416)</label><input type="text" id="setWhatsapp" /></div>
+                <div class="form-field"><label for="setEmail">Official Business Email</label><input type="email" id="setEmail" /></div>
+                <div class="form-field"><label for="setHours">Working Hours</label><input type="text" id="setHours" /></div>
+                <div class="form-field"><label for="setLogoUrl">Brand Logo External URL or Database Path</label><input type="text" id="setLogoUrl" placeholder="/assets/aistudio/logo2_be71428a.jpg or https://..." /></div>
+                <div class="form-field"><label for="setLogoUpload">Or Upload Brand Logo to Database</label><input type="file" id="setLogoUpload" accept="image/*" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="setLogoPreview" src="/assets/aistudio/logo2_be71428a.jpg" alt="Current brand logo preview" class="img-preview-thumb" style="object-fit:contain;" />
+                <span class="img-preview-caption">Live Brand Logo Preview (stored in SQLite database when uploaded, or loaded from external URL)</span>
+              </div>
+
+              <h3 style="margin-top:20px;">Social Media Links</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="setFacebook">Facebook URL</label><input type="url" id="setFacebook" /></div>
+                <div class="form-field"><label for="setTiktok">TikTok URL</label><input type="url" id="setTiktok" /></div>
+                <div class="form-field"><label for="setYoutube">YouTube URL</label><input type="url" id="setYoutube" /></div>
+                <div class="form-field"><label for="setInstagram">Instagram URL</label><input type="url" id="setInstagram" /></div>
+              </div>
+
+              <h3 style="margin-top:20px;">Homepage Metrics &amp; Company Story</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="setStatsMembers">Registered Members Stat</label><input type="text" id="setStatsMembers" /></div>
+                <div class="form-field"><label for="setStatsCapital">Active Pool Volume Stat</label><input type="text" id="setStatsCapital" /></div>
+                <div class="form-field"><label for="setStatsYears">Established Stat</label><input type="text" id="setStatsYears" /></div>
+                <div class="form-field"><label for="setStatsHours">Consultation Hours Stat</label><input type="text" id="setStatsHours" /></div>
+              </div>
+              <div class="form-field"><label for="setMission">Company Mission</label><textarea id="setMission"></textarea></div>
+              <div class="form-field"><label for="setVision">Company Vision</label><textarea id="setVision"></textarea></div>
+              <div class="form-field"><label for="setStory">Company Story (About Us)</label><textarea id="setStory"></textarea></div>
+              <div class="form-field"><label for="setRiskDisclosure">Investment Risk Disclosure Banner</label><textarea id="setRiskDisclosure"></textarea></div>
+              <div class="form-field"><label for="setAgePolicy">Age &amp; Minor Consent Notice</label><textarea id="setAgePolicy"></textarea></div>
+
+              <button type="submit" class="btn btn-primary">Save All Site Settings</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- TAB 3: Hero Slides Manager -->
+        <section id="tab-hero" class="tab-panel">
+          <div class="panel-card">
+            <h2 id="heroFormHeading">Add / Edit Homepage Hero Slide</h2>
+            <form id="heroSlideForm">
+              <input type="hidden" id="heroEditId" />
+              <div class="form-grid">
+                <div class="form-field"><label for="heroBadge">Eyebrow Badge Text</label><input type="text" id="heroBadge" placeholder="e.g., Kawempe Tula, Kampala" /></div>
+                <div class="form-field"><label for="heroTitle">Headline Title</label><input type="text" id="heroTitle" required /></div>
+                <div class="form-field"><label for="heroCtaText">Button Label</label><input type="text" id="heroCtaText" value="Explore Investment Plans" /></div>
+                <div class="form-field"><label for="heroCtaLink">Button Link</label><input type="text" id="heroCtaLink" value="investments.html" /></div>
+                <div class="form-field"><label for="heroOrder">Display Order</label><input type="number" id="heroOrder" value="1" /></div>
+                <div class="form-field"><label for="heroImageUrl">Background Image URL (External Link or Uploaded Path)</label><input type="text" id="heroImageUrl" required value="/assets/aistudio/partnership_65dac3a6.jpg" placeholder="https://... or /api/media/..." /></div>
+              </div>
+              <div class="form-grid">
+                <div class="form-field"><label for="heroImageUpload">Or Upload New Hero Image to Database</label><input type="file" id="heroImageUpload" accept="image/*" /></div>
+                <div class="form-field"><label for="heroImageAlt">Image Alt Description (SEO &amp; Accessibility)</label><input type="text" id="heroImageAlt" required placeholder="Describe what is shown in the hero photo" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="heroImgPreview" src="/assets/aistudio/partnership_65dac3a6.jpg" alt="Hero slide image preview" class="img-preview-thumb" />
+                <span class="img-preview-caption">Live Hero Image Preview — paste a live URL above or upload a file directly into the database.</span>
+              </div>
+              <div class="form-field"><label for="heroSubtitle">Subtitle Paragraph</label><textarea id="heroSubtitle" required></textarea></div>
+              <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary">Save Hero Slide</button>
+                <button type="button" id="cancelHeroEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h3>Active Hero Slides</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Order</th><th>Image</th><th>Headline</th><th>CTA</th><th>Actions</th></tr></thead>
+                <tbody id="heroSlidesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: Investor Testimonials ("What Our Investors Say") -->
+        <section id="tab-testimonials" class="tab-panel">
+          <div class="panel-card">
+            <h2 id="testFormHeading">Add / Edit Verified Investor Statement ("What Our Investors Say")</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">Edit quotes, update investor names, upload a photo directly to the SQLite database, or paste an external live image URL.</p>
+            <form id="testimonialForm">
+              <input type="hidden" id="testEditId" />
+              <div class="form-grid">
+                <div class="form-field"><label for="testClientName">Client Full Name</label><input type="text" id="testClientName" required /></div>
+                <div class="form-field"><label for="testRole">Client Role / Status</label><input type="text" id="testRole" value="Verified Client" required /></div>
+                <div class="form-field"><label for="testLocation">Location</label><input type="text" id="testLocation" value="Kampala, Uganda" /></div>
+                <div class="form-field"><label for="testOrder">Display Order</label><input type="number" id="testOrder" value="1" /></div>
+                <div class="form-field"><label for="testPhotoUrl">Client Photo URL (External Link or Database Path)</label><input type="text" id="testPhotoUrl" value="/assets/aistudio/josephine_a1a0850e.jpg" placeholder="https://... or /api/media/..." required /></div>
+                <div class="form-field"><label for="testPhotoUpload">Or Upload Client Photo to Database</label><input type="file" id="testPhotoUpload" accept="image/*" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="testPhotoPreview" src="/assets/aistudio/josephine_a1a0850e.jpg" alt="Investor portrait preview" class="img-preview-thumb" style="border-radius:50%;width:56px;height:56px;" />
+                <span class="img-preview-caption">Investor Photo Preview — automatically updates when you paste an image link or upload a file to the database.</span>
+              </div>
+              <div class="form-field"><label for="testPhotoAlt">Photo Alt Text</label><input type="text" id="testPhotoAlt" placeholder="Portrait of verified SHIMOGY member" /></div>
+              <div class="form-field"><label for="testQuote">Client Quote</label><textarea id="testQuote" required></textarea></div>
+              <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary">Save Testimonial</button>
+                <button type="button" id="cancelTestEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h3>Published Testimonials</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Photo</th><th>Client Name</th><th>Role &amp; Location</th><th>Quote</th><th>Actions</th></tr></thead>
+                <tbody id="testimonialsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5: Public Investment Plans & Slots -->
+        <section id="tab-plans" class="tab-panel">
+          <div class="panel-card">
+            <h2 id="planFormHeading">Add / Edit Public Investment Plan</h2>
+            <form id="publicPlanForm">
+              <input type="hidden" id="planEditId" />
+              <div class="form-grid">
+                <div class="form-field"><label for="planName">Plan Name</label><input type="text" id="planName" required /></div>
+                <div class="form-field"><label for="planPrice">Capital Required (UGX)</label><input type="number" id="planPrice" required /></div>
+                <div class="form-field"><label for="planReturn">Expected Return (UGX)</label><input type="number" id="planReturn" required /></div>
+                <div class="form-field"><label for="planDuration">Duration</label><input type="text" id="planDuration" placeholder="e.g., 60 Days" required /></div>
+                <div class="form-field">
+                  <label for="planRisk">Risk Category</label>
+                  <select id="planRisk"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select>
+                </div>
+                <div class="form-field"><label for="planSlots">Slots Remaining</label><input type="number" id="planSlots" min="0" value="5" required /></div>
+                <div class="form-field">
+                  <label for="planStatus">Availability Status</label>
+                  <select id="planStatus"><option value="available">Available</option><option value="closed">Closed / Full</option></select>
+                </div>
+                <div class="form-field"><label for="planBadge">Badge Tag (Optional)</label><input type="text" id="planBadge" placeholder="e.g., Popular, Trending, New" /></div>
+                <div class="form-field"><label for="planImageUrl">Plan Image URL (External or Database Path)</label><input type="text" id="planImageUrl" value="/assets/aistudio/graph_ddbd7244.jpg" required /></div>
+                <div class="form-field"><label for="planImageUpload">Or Upload Plan Image to Database</label><input type="file" id="planImageUpload" accept="image/*" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="planImgPreview" src="/assets/aistudio/graph_ddbd7244.jpg" alt="Investment plan preview" class="img-preview-thumb" />
+                <span class="img-preview-caption">Live Investment Plan Image Preview</span>
+              </div>
+              <div class="form-field"><label for="planImageAlt">Image Alt Text</label><input type="text" id="planImageAlt" placeholder="Descriptive image alt text" /></div>
+              <div class="form-field"><label for="planDescription">Plan Description</label><textarea id="planDescription"></textarea></div>
+              <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary">Save Investment Plan</button>
+                <button type="button" id="cancelPlanEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h3>Public Investment Plans Catalog</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Plan</th><th>Capital</th><th>Est. Return</th><th>Duration</th><th>Risk</th><th>Slots</th><th>Actions</th></tr></thead>
+                <tbody id="plansTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 6: Public Savings Cycles -->
+        <section id="tab-public-cycles" class="tab-panel">
+          <div class="panel-card">
+            <h2 id="pubCycleFormHeading">Add / Edit Active Savings Cycle (Public Cycles Page)</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">All cycles published here appear on cycles.html with status "Active" and no member counts displayed publicly.</p>
+            <form id="publicCycleForm">
+              <input type="hidden" id="pubCycleEditId" />
+              <div class="form-grid">
+                <div class="form-field"><label for="pubCycleName">Cycle Name</label><input type="text" id="pubCycleName" required placeholder="e.g., Group 5 - Kawempe Traders" /></div>
+                <div class="form-field"><label for="pubCycleContrib">Contribution Amount (UGX)</label><input type="number" id="pubCycleContrib" required /></div>
+                <div class="form-field">
+                  <label for="pubCyclePayout">Pay Out Duration</label>
+                  <select id="pubCyclePayout">
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly" selected>Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Customize">Customize</option>
+                  </select>
+                </div>
+                <div class="form-field"><label for="pubCycleImageUrl">Cycle Image URL (External or Database Path)</label><input type="text" id="pubCycleImageUrl" value="/assets/aistudio/partnership_65dac3a6.jpg" required /></div>
+                <div class="form-field"><label for="pubCycleImageUpload">Or Upload Cycle Image to Database</label><input type="file" id="pubCycleImageUpload" accept="image/*" /></div>
+                <div class="form-field"><label for="pubCycleImageAlt">Image Alt Text</label><input type="text" id="pubCycleImageAlt" placeholder="Descriptive alt text" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="pubCycleImgPreview" src="/assets/aistudio/partnership_65dac3a6.jpg" alt="Savings cycle preview" class="img-preview-thumb" />
+                <span class="img-preview-caption">Live Public Cycle Image Preview</span>
+              </div>
+              <div class="form-field"><label for="pubCycleDesc">Cycle Description</label><textarea id="pubCycleDesc"></textarea></div>
+              <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary">Save Public Cycle</button>
+                <button type="button" id="cancelPubCycleEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h3>Active Public Savings Cycles</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Image</th><th>Cycle Name</th><th>Contribution</th><th>Pay Out Duration</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="publicCyclesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 7: News & Updates -->
+        <section id="tab-updates" class="tab-panel">
+          <div class="panel-card">
+            <h2>Quick Updates Scrolling Banner Text</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">Edit the daily announcement text that scrolls slowly from right to left across the red Quick Updates banner on the Updates page.</p>
+            <form id="quickTickerForm">
+              <div class="form-field">
+                <label for="quickTickerInput">Scrolling Banner Message</label>
+                <textarea id="quickTickerInput" rows="2" placeholder="Enter today's announcement to scroll across the Quick Updates banner..." required></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Quick Updates Banner Text</button>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h2>Publish Company News or Update</h2>
+            <form id="publicUpdateForm">
+              <div class="form-grid">
+                <div class="form-field"><label for="updTitle">Title</label><input type="text" id="updTitle" required /></div>
+                <div class="form-field">
+                  <label for="updCategory">Category</label>
+                  <select id="updCategory">
+                    <option value="news">News</option>
+                    <option value="story">Member Story</option>
+                    <option value="tip">Financial Tip</option>
+                    <option value="event">Event</option>
+                  </select>
+                </div>
+                <div class="form-field"><label for="updDate">Published Date</label><input type="date" id="updDate" required /></div>
+                <div class="form-field"><label for="updImageUrl">Image URL (External or Database Path)</label><input type="text" id="updImageUrl" value="/assets/aistudio/graph_ddbd7244.jpg" required /></div>
+                <div class="form-field"><label for="updImageUpload">Or Upload Update Image to Database</label><input type="file" id="updImageUpload" accept="image/*" /></div>
+                <div class="form-field"><label for="updImageAlt">Image Alt Text</label><input type="text" id="updImageAlt" placeholder="Descriptive alt text" /></div>
+              </div>
+              <div class="img-preview-box">
+                <img id="updImgPreview" src="/assets/aistudio/graph_ddbd7244.jpg" alt="Update story image preview" class="img-preview-thumb" />
+                <span class="img-preview-caption">Live Story Image Preview</span>
+              </div>
+              <div class="form-field"><label for="updExcerpt">Short Excerpt</label><input type="text" id="updExcerpt" required /></div>
+              <div class="form-field"><label for="updDetail">Full Article Content</label><textarea id="updDetail" required></textarea></div>
+              <button type="submit" class="btn btn-primary">Publish Update</button>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h3>Published Updates</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Category</th><th>Title</th><th>Actions</th></tr></thead>
+                <tbody id="updatesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 8: Members Directory & Inspector -->
+        <section id="tab-members" class="tab-panel">
+          <div class="panel-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+              <h2 style="margin-bottom:0;">Members Directory</h2>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <input type="search" id="memberSearchInput" placeholder="Search by phone or name..." style="min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);" />
+                <button type="button" id="memberSearchBtn" class="btn btn-primary btn-sm">Find Member</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Name</th><th>Phone</th><th>Group</th><th>Balance</th><th>Total Invested</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="membersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="memberInspectorCard" class="panel-card" style="display:none;">
+            <h3 id="inspectorTitle">Member Record</h3>
+            <form id="updateMemberForm" style="margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border-light);">
+              <input type="hidden" id="editMemId" />
+              <div class="form-grid">
+                <div class="form-field"><label for="editMemName">Full Name</label><input type="text" id="editMemName" required /></div>
+                <div class="form-field"><label for="editMemPhone">Phone</label><input type="text" id="editMemPhone" required /></div>
+                <div class="form-field"><label for="editMemEmail">Email</label><input type="email" id="editMemEmail" /></div>
+                <div class="form-field"><label for="editMemGroup">Group Name</label><input type="text" id="editMemGroup" /></div>
+                <div class="form-field"><label for="editMemBalance">Balance (UGX)</label><input type="number" id="editMemBalance" /></div>
+                <div class="form-field"><label for="editMemInvested">Total Invested (UGX)</label><input type="number" id="editMemInvested" /></div>
+                <div class="form-field">
+                  <label for="editMemStatus">Status</label>
+                  <select id="editMemStatus"><option value="active">Active</option><option value="pending">Pending</option><option value="suspended">Suspended</option></select>
+                </div>
+                <div class="form-field"><label for="editMemNewPass">Reset Password (Optional)</label><input type="text" id="editMemNewPass" placeholder="Leave blank to keep current" /></div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm">Save Member Changes</button>
+            </form>
+            <div id="inspectorLedgers"></div>
+          </div>
+        </section>
+
+        <!-- TAB 9: Create New Member -->
+        <section id="tab-create-member" class="tab-panel">
+          <div class="panel-card">
+            <h2>Create New Member Account</h2>
+            <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:18px;">Register a member and optionally attach their initial Investment Plan, Savings Account, Loan, or Cycle record so everything immediately reflects in their Client Portal.</p>
+            <form id="createMemberForm">
+              <h3>1. Member Core Details</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="cmName">Full Name</label><input type="text" id="cmName" required /></div>
+                <div class="form-field"><label for="cmPhone">Phone Number</label><input type="tel" id="cmPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="cmPassword">Portal Password</label><input type="text" id="cmPassword" required placeholder="e.g., last 4 digits" /></div>
+                <div class="form-field"><label for="cmEmail">Email (Optional)</label><input type="email" id="cmEmail" /></div>
+                <div class="form-field"><label for="cmGroup">Group Name (Optional)</label><input type="text" id="cmGroup" /></div>
+                <div class="form-field"><label for="cmBalance">Starting Balance (UGX)</label><input type="number" id="cmBalance" value="0" /></div>
+              </div>
+
+              <h3 style="margin-top:16px;">2. Optional Initial Investment Plan</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="cmInvPlan">Plan Name</label><input type="text" id="cmInvPlan" placeholder="e.g., Poultry Farm" /></div>
+                <div class="form-field"><label for="cmInvAmount">Capital Amount (UGX)</label><input type="number" id="cmInvAmount" /></div>
+                <div class="form-field"><label for="cmInvReturn">Expected Return (UGX)</label><input type="number" id="cmInvReturn" /></div>
+                <div class="form-field"><label for="cmInvDuration">Duration</label><input type="text" id="cmInvDuration" placeholder="e.g., 60 Days" /></div>
+              </div>
+
+              <h3 style="margin-top:16px;">3. Optional Initial Savings Account</h3>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="cmSavType">Savings Account Type</label>
+                  <select id="cmSavType">
+                    <option value="">-- None --</option>
+                    <option value="Current Account">Current Account</option>
+                    <option value="Fixed Account">Fixed Account</option>
+                  </select>
+                </div>
+                <div class="form-field"><label for="cmSavBal">Initial Savings Balance (UGX)</label><input type="number" id="cmSavBal" value="0" /></div>
+              </div>
+
+              <h3 style="margin-top:16px;">4. Optional Initial Member Loan</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="cmLoanAmt">Loan Amount (UGX)</label><input type="number" id="cmLoanAmt" /></div>
+                <div class="form-field"><label for="cmLoanPurpose">Purpose</label><input type="text" id="cmLoanPurpose" placeholder="e.g., Retail inventory" /></div>
+                <div class="form-field"><label for="cmLoanDur">Duration</label><input type="text" id="cmLoanDur" placeholder="e.g., 30 days" /></div>
+                <div class="form-field"><label for="cmLoanRate">Interest Rate</label><input type="text" id="cmLoanRate" value="10%" /></div>
+              </div>
+
+              <h3 style="margin-top:16px;">5. Optional Initial Savings Cycle</h3>
+              <div class="form-grid">
+                <div class="form-field"><label for="cmCycleName">Cycle Name</label><input type="text" id="cmCycleName" placeholder="e.g., Group 1 - Kawempe Savers" /></div>
+                <div class="form-field"><label for="cmCycleContrib">Contribution (UGX)</label><input type="number" id="cmCycleContrib" /></div>
+                <div class="form-field">
+                  <label for="cmCyclePayout">Pay out Duration</label>
+                  <select id="cmCyclePayout">
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly" selected>Monthly</option>
+                    <option value="Customize">Customize</option>
+                  </select>
+                </div>
+                <div class="form-field" id="cmCycleCustomWrap" style="display:none;"><label for="cmCycleCustom">Custom Pay out Duration</label><input type="text" id="cmCycleCustom" placeholder="e.g., Bi-weekly" /></div>
+                <div class="form-field"><label for="cmCycleMembers">Number of Members</label><input type="number" id="cmCycleMembers" min="2" value="10" /></div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="margin-top:10px;">Create Member &amp; Linked Records</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- TAB 10: Add Investments / Savings / Loans / Cycles -->
+        <section id="tab-finance" class="tab-panel">
+          <div class="two-col-grid">
+            <div class="panel-card">
+              <h3>Record Member Investment</h3>
+              <form id="addInvForm">
+                <div class="form-field"><label for="fiInvPhone">Member Phone</label><input type="tel" id="fiInvPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiInvName">Member Name (Optional if registered)</label><input type="text" id="fiInvName" /></div>
+                <div class="form-field"><label for="fiInvPlan">Investment Plan Name</label><input type="text" id="fiInvPlan" required placeholder="e.g., Poultry Farm" /></div>
+                <div class="form-grid">
+                  <div class="form-field"><label for="fiInvAmt">Amount (UGX)</label><input type="number" id="fiInvAmt" required /></div>
+                  <div class="form-field"><label for="fiInvRet">Expected Return (UGX)</label><input type="number" id="fiInvRet" required /></div>
+                </div>
+                <div class="form-field"><label for="fiInvDur">Duration</label><input type="text" id="fiInvDur" value="60 Days" required /></div>
+                <button type="submit" class="btn btn-primary btn-full">Record Investment</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <h3>Add Savings Account</h3>
+              <form id="addSavForm">
+                <div class="form-field"><label for="fiSavPhone">Member Phone</label><input type="tel" id="fiSavPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiSavName">Member Name (Optional if registered)</label><input type="text" id="fiSavName" /></div>
+                <div class="form-field">
+                  <label for="fiSavType">Account Type</label>
+                  <select id="fiSavType" required>
+                    <option value="Current Account">Current Account</option>
+                    <option value="Fixed Account">Fixed Account</option>
+                  </select>
+                </div>
+                <div class="form-field"><label for="fiSavBal">Deposit Balance (UGX)</label><input type="number" id="fiSavBal" required /></div>
+                <button type="submit" class="btn btn-primary btn-full">Add Savings Record</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <h3>Issue / Record Member Loan</h3>
+              <form id="addLoanForm">
+                <div class="form-field"><label for="fiLoanPhone">Member Phone</label><input type="tel" id="fiLoanPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiLoanName">Member Name (Optional if registered)</label><input type="text" id="fiLoanName" /></div>
+                <div class="form-grid">
+                  <div class="form-field"><label for="fiLoanAmt">Loan Amount (UGX)</label><input type="number" id="fiLoanAmt" required /></div>
+                  <div class="form-field"><label for="fiLoanDur">Repayment Duration</label><input type="text" id="fiLoanDur" value="30 days" required /></div>
+                </div>
+                <div class="form-grid">
+                  <div class="form-field"><label for="fiLoanPurpose">Purpose</label><input type="text" id="fiLoanPurpose" placeholder="Business inventory" required /></div>
+                  <div class="form-field"><label for="fiLoanRate">Interest Rate</label><input type="text" id="fiLoanRate" value="10%" required /></div>
+                </div>
+                <div class="form-field">
+                  <label for="fiLoanStatus">Initial Status</label>
+                  <select id="fiLoanStatus"><option value="active">Active</option><option value="pending">Pending</option><option value="paid">Paid</option></select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Record Member Loan</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <h3>Add Member Cycle</h3>
+              <form id="addCycleForm">
+                <div class="form-field"><label for="fiCycPhone">Member Phone</label><input type="tel" id="fiCycPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiCycName">Member Name (Optional if registered)</label><input type="text" id="fiCycName" /></div>
+                <div class="form-field"><label for="fiCycTitle">Cycle Name</label><input type="text" id="fiCycTitle" required placeholder="e.g., Group 1 - Kawempe Savers" /></div>
+                <div class="form-grid">
+                  <div class="form-field"><label for="fiCycContrib">Contribution (UGX)</label><input type="number" id="fiCycContrib" required /></div>
+                  <div class="form-field"><label for="fiCycMembers">Number of Members</label><input type="number" id="fiCycMembers" min="2" value="10" required /></div>
+                </div>
+                <div class="form-field">
+                  <label for="fiCycPayout">Pay out Duration</label>
+                  <select id="fiCycPayout">
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly" selected>Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Customize">Customize</option>
+                  </select>
+                </div>
+                <div class="form-field" id="fiCycCustomWrap" style="display:none;"><label for="fiCycCustom">Custom Pay out Schedule</label><input type="text" id="fiCycCustom" placeholder="e.g., Every 14 days" /></div>
+                <button type="submit" class="btn btn-primary btn-full">Add Member Cycle</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <h3>Recorded Member Loans</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Member</th><th>Phone</th><th>Amount</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminLoansTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 11: Service Requests -->
+        <section id="tab-requests" class="tab-panel">
+          <div class="panel-card">
+            <h2>Client Service Requests (Investments, Savings, Cycles, Loans)</h2>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>ID</th><th>Type</th><th>Applicant</th><th>Phone</th><th>Details</th><th>Age / Guardian</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="requestsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 12: Data Deletion Requests -->
+        <section id="tab-deletion" class="tab-panel">
+          <div class="panel-card">
+            <h2>Privacy &amp; Data Deletion Requests</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">Purging removes the member profile, linked ledgers, and public service inquiries matching the registered phone number.</p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="deletionTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 13: Admin Account Security -->
+        <section id="tab-account" class="tab-panel">
+          <div class="panel-card" style="max-width:540px;">
+            <h2>Administrator Credentials</h2>
+            <form id="adminSecurityForm">
+              <div class="form-field"><label for="secAdminEmail">Admin Email</label><input type="email" id="secAdminEmail" required /></div>
+              <div class="form-field"><label for="secAdminPass">New Password (minimum 6 characters)</label><input type="password" id="secAdminPass" minlength="6" placeholder="Leave blank to keep current password" /></div>
+              <button type="submit" class="btn btn-primary">Update Admin Credentials</button>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/site.js"></script>
+  <script src="/js/chart.umd.min.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

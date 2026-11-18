@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIMOGY | My Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* (Your original CSS – same as before, kept intact) */
+        @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700;6..96,800;6..96,900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700;8..60,800&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; color: #d0d0d0; min-height: 100vh; display: flex; flex-direction: column; background: #0a0e14; }
+        .orb { position: fixed; border-radius: 50%; filter: blur(100px); z-index: 0; pointer-events: none; animation: orbFloat 12s infinite ease-in-out; }
+        .orb-1 { width: 400px; height: 400px; background: rgba(0,180,216,0.04); top: -10%; left: -5%; }
+        .orb-2 { width: 350px; height: 350px; background: rgba(0,230,118,0.03); bottom: -15%; right: -8%; animation-delay: 4s; }
+        @keyframes orbFloat { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(40px,-30px) scale(1.2); } 66% { transform: translate(-30px,20px) scale(0.9); } }
+        .bg-particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: hidden; }
+        .bg-dot { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: rgba(0,180,216,0.15); animation: dotFloat 15s infinite linear; }
+        @keyframes dotFloat { 0% { transform: translateY(100vh); opacity: 0; } 10% { opacity: 0.7; } 90% { opacity: 0.7; } 100% { transform: translateY(-10vh); opacity: 0; } }
+        .top-bar { background: #0f1419; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.65rem; color: rgba(255,255,255,0.4); }
+        .top-bar-inner { max-width: 1300px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; }
+        .navbar { background: rgba(10,14,26,0.96); backdrop-filter: blur(20px); padding: 0.8rem 2rem; position: sticky; top: 0; z-index: 1000; border-bottom: 2px solid #1a3a5c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo-text h1 { font-family: 'Bodoni Moda', serif; font-size: 1.3rem; font-weight: 900; background: linear-gradient(135deg, #fff, #48cae4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .logo-text p { font-size: 0.5rem; letter-spacing: 2px; color: #48cae4; }
+        .login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; position: relative; z-index: 1; background: url('https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&h=1080&fit=crop') center/cover no-repeat; }
+        .login-wrap::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(6,13,26,0.93), rgba(10,30,55,0.9)); backdrop-filter: blur(8px); }
+        .login-box { position: relative; z-index: 1; background: linear-gradient(145deg, rgba(10,26,53,0.9), rgba(13,34,71,0.85)); backdrop-filter: blur(20px); border: 1px solid rgba(0,180,216,0.2); border-radius: 24px; padding: 3rem 2.5rem; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+        .login-box .login-icon { width: 70px; height: 70px; background: linear-gradient(135deg, rgba(0,180,216,0.25), rgba(0,119,182,0.15)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 2rem; border: 2px solid rgba(0,180,216,0.35); box-shadow: 0 0 40px rgba(0,180,216,0.15); }
+        .login-box h2 { font-family: 'Playfair Display', serif; color: #fff; margin-bottom: 0.3rem; font-size: 1.4rem; }
+        .login-box p { color: rgba(255,255,255,0.4); font-size: 0.8rem; margin-bottom: 1.5rem; }
+        .login-box input { width: 100%; padding: 13px 18px; margin: 8px 0; border-radius: 50px; border: 1px solid rgba(0,180,216,0.18); background: rgba(255,255,255,0.04); color: white; outline: none; font-size: 0.88rem; transition: all 0.3s; }
+        .login-box input:focus { border-color: #00b4d8; box-shadow: 0 0 0 4px rgba(0,180,216,0.06); }
+        .login-box input::placeholder { color: rgba(255,255,255,0.3); }
+        .btn-primary { width: 100%; padding: 13px; border: none; border-radius: 50px; background: linear-gradient(135deg, #00b4d8, #0077b6); color: white; font-weight: 700; cursor: pointer; margin-top: 1rem; font-size: 0.9rem; transition: all 0.3s; box-shadow: 0 8px 25px rgba(0,180,216,0.2); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,180,216,0.35); }
+        .dash-container { display: none; flex: 1; padding: 0; position: relative; z-index: 1; }
+        .welcome-card { background: linear-gradient(135deg, rgba(0,180,216,0.06), rgba(0,119,182,0.03)); border: 1px solid rgba(0,180,216,0.12); padding: 1.5rem 2rem; display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+        .welcome-card .member-avatar { width: 55px; height: 55px; border-radius: 50%; background: linear-gradient(135deg, #ffd700, #ffb800); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; color: #000; flex-shrink: 0; }
+        .welcome-card h2 { font-size: 1.2rem; font-family: 'Playfair Display', serif; color: #fff; }
+        .welcome-card .subtitle { color: rgba(255,255,255,0.45); font-size: 0.78rem; }
+        .live-indicator { display: inline-flex; align-items: center; gap: 5px; color: #00e676; font-size: 0.65rem; background: rgba(0,230,118,0.08); padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(0,230,118,0.15); }
+        .live-dot { width: 6px; height: 6px; background: #00e676; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .dashboard-layout { display: grid; grid-template-columns: 1fr 320px; gap: 2rem; max-width: 1300px; margin: 0 auto; padding: 2rem; }
+        .main-column { min-width: 0; }
+        .side-column { position: sticky; top: 80px; align-self: start; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-bottom: 1.5rem; }
+        .stat-box { background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 1.2rem; text-align: center; transition: all 0.3s; }
+        .stat-box:hover { border-color: rgba(0,180,216,0.25); transform: translateY(-2px); }
+        .stat-box .stat-icon { font-size: 1.3rem; margin-bottom: 0.3rem; }
+        .stat-box .val { font-size: 1.3rem; font-weight: 800; color: #ffd700; }
+        .stat-box .lbl { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; margin-top: 0.2rem; }
+        .section-card { background: rgba(255,255,255,0.012); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 1.2rem; margin-bottom: 1rem; }
+        .section-card .section-header { display: flex; align-items: center; gap: 6px; margin-bottom: 0.8rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .section-card h4 { color: #48cae4; font-size: 0.9rem; font-family: 'Playfair Display', serif; margin: 0; }
+        .section-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+        .icon-investments { background: rgba(0,180,216,0.12); }
+        .icon-savings { background: rgba(0,230,118,0.12); }
+        .icon-loans { background: rgba(255,152,0,0.12); }
+        .icon-cycles { background: rgba(156,39,176,0.12); }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.6rem; border-radius: 6px; flex-wrap: wrap; gap: 0.4rem; transition: all 0.2s; font-size: 0.78rem; }
+        .item-row:hover { background: rgba(0,180,216,0.03); }
+        .badge { padding: 3px 8px; border-radius: 10px; font-size: 0.6rem; font-weight: 600; }
+        .badge-active { background: rgba(0,230,118,0.12); color: #00e676; border: 1px solid rgba(0,230,118,0.18); }
+        .badge-pending { background: rgba(255,152,0,0.1); color: #ffb800; border: 1px solid rgba(255,152,0,0.18); }
+        .badge-info { background: rgba(0,180,216,0.1); color: #48cae4; border: 1px solid rgba(0,180,216,0.18); }
+        .empty-msg { color: rgba(255,255,255,0.2); font-size: 0.78rem; text-align: center; padding: 1.5rem; }
+        .side-section { background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .side-section h4 { font-size: 0.6rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #48cae4; margin-bottom: 0.8rem; padding-bottom: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .side-list { list-style: none; }
+        .side-list li { padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 0.73rem; color: rgba(255,255,255,0.5); cursor: pointer; transition: 0.2s; }
+        .side-list li:hover { color: #48cae4; }
+        .side-list li:last-child { border-bottom: none; }
+        .news-item { padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; transition: 0.2s; }
+        .news-item:hover { padding-left: 4px; }
+        .news-item:last-child { border-bottom: none; }
+        .news-item .news-tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.55rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.2rem; }
+        .tag-story { background: rgba(0,230,118,0.15); color: #00e676; }
+        .tag-news { background: rgba(0,180,216,0.15); color: #48cae4; }
+        .tag-tip { background: rgba(255,152,0,0.15); color: #ffb800; }
+        .news-item h5 { font-size: 0.75rem; font-weight: 600; color: #e0e0e0; margin-bottom: 0.2rem; font-family: 'Source Serif 4', serif; }
+        .news-item .news-date { font-size: 0.6rem; color: rgba(255,255,255,0.25); }
+        .plans-slider-section { margin: 1.5rem 0; }
+        .slider-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, #48cae4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .slider-container { width: 100%; overflow: hidden; }
+        .slider-track { display: flex; gap: 1rem; animation: slideLeft 35s linear infinite; width: fit-content; }
+        .slider-track:hover { animation-play-state: paused; }
+        @keyframes slideLeft { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .slider-card { min-width: 220px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; transition: all 0.3s; cursor: pointer; }
+        .slider-card:hover { border-color: rgba(0,180,216,0.3); transform: translateY(-3px); }
+        .slider-card .slider-img { height: 110px; background-size: cover; background-position: center; position: relative; }
+        .slider-badge { position: absolute; top: 6px; right: 6px; padding: 2px 6px; border-radius: 8px; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; }
+        .badge-new { background: rgba(0,230,118,0.8); color: #000; }
+        .badge-hot { background: rgba(255,82,82,0.8); color: #fff; }
+        .badge-trending { background: rgba(255,152,0,0.8); color: #000; }
+        .slider-card .slider-body { padding: 0.8rem; text-align: center; }
+        .slider-card .slider-body h5 { color: #48cae4; font-size: 0.75rem; margin-bottom: 0.2rem; }
+        .slider-card .slider-invest { color: rgba(255,255,255,0.5); font-size: 0.65rem; }
+        .slider-card .slider-return { color: #00e676; font-weight: 700; font-size: 0.8rem; }
+        .btn { padding: 7px 14px; border-radius: 20px; font-size: 0.7rem; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-outline { background: transparent; border: 1px solid rgba(0,180,216,0.3); color: #48cae4; }
+        .btn-outline:hover { background: rgba(0,180,216,0.08); }
+        .btn-danger { background: rgba(255,82,82,0.15); color: #ff5252; border: 1px solid rgba(255,82,82,0.2); }
+        .btn-refresh { background: rgba(0,180,216,0.08); border: 1px solid rgba(0,180,216,0.2); color: #48cae4; padding: 8px 18px; border-radius: 50px; font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all 0.3s; }
+        .btn-refresh:hover { background: rgba(0,180,216,0.15); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6,13,26,0.9); backdrop-filter: blur(15px); display: flex; align-items: center; justify-content: center; z-index: 10000; visibility: hidden; opacity: 0; transition: 0.3s; }
+        .modal-overlay.active { visibility: visible; opacity: 1; }
+        .modal-content { background: linear-gradient(145deg, rgba(10,26,53,0.98), rgba(13,34,71,0.95)); border: 1px solid rgba(0,180,216,0.25); border-radius: 20px; padding: 1.5rem; width: 90%; max-width: 380px; }
+        .modal-content h3 { color: #48cae4; margin-bottom: 0.8rem; text-align: center; font-size: 1rem; }
+        .modal-content input { width: 100%; padding: 10px 14px; margin: 5px 0; border-radius: 50px; border: 1px solid rgba(0,180,216,0.18); background: rgba(255,255,255,0.04); color: white; outline: none; font-size: 0.8rem; }
+        .modal-content input:focus { border-color: #00b4d8; }
+        .modal-buttons { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+        .modal-buttons button { flex: 1; padding: 9px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; font-size: 0.78rem; }
+        .msg { padding: 0.5rem; border-radius: 8px; margin-top: 0.4rem; font-size: 0.7rem; display: none; text-align: center; }
+        .msg-success { background: rgba(0,230,118,0.08); color: #00e676; }
+        .msg-error { background: rgba(255,82,82,0.08); color: #ff5252; }
+        footer { background: #0d1117; padding: 1.5rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); font-size: 0.7rem; color: rgba(255,255,255,0.25); position: relative; z-index: 1; }
+        @media (max-width: 900px) {
+            .dashboard-layout { grid-template-columns: 1fr; padding: 1rem; }
+            .side-column { position: static; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .slider-card { min-width: 180px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="orb orb-1"></div><div class="orb orb-2"></div>
+<div class="bg-particles" id="bgParticles"></div>
+
+<div class="top-bar">
+    <div class="top-bar-inner">
+        <span id="todayDate"></span>
+        <span>📍 Kawempe, Kampala</span>
+    </div>
+</div>
+
+<div class="navbar">
+    <div class="logo-text"><h1>SHIMOGY</h1><p>MEMBER DASHBOARD</p></div>
+    <div style="display:flex;gap:0.6rem;align-items:center;">
+        <a href="index.html" style="color:rgba(255,255,255,0.45);text-decoration:none;font-size:0.75rem;"><i class="fas fa-home"></i> Home</a>
+        <button class="btn btn-outline" id="passBtn" style="display:none;"><i class="fas fa-key"></i> Password</button>
+        <button class="btn btn-danger" id="logoutBtn" style="display:none;"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+</div>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="loginWrap">
+    <div class="login-box">
+        <div class="login-icon">🔐</div>
+        <h2>Welcome Back</h2>
+        <p>Sign in to your investment dashboard</p>
+        <input type="tel" id="mPhone" placeholder="Phone Number">
+        <input type="password" id="mPassword" placeholder="Password">
+        <div id="loginError" style="color:#ff5252;font-size:0.78rem;margin-top:0.4rem;display:none;"></div>
+        <button class="btn-primary" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Access My Dashboard</button>
+        <p style="color:rgba(255,255,255,0.2);font-size:0.65rem;margin-top:1rem;">Credentials provided by SHIMOGY admin</p>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dash-container" id="dashContent">
+    <div class="welcome-card">
+        <div class="member-avatar" id="dashAvatar">👤</div>
+        <div style="flex:1;">
+            <h2>Welcome, <span id="dashName">Member</span>!</h2>
+            <p class="subtitle">Member since <span id="dashJoined">-</span> • Group: <span id="dashGroup">-</span></p>
+        </div>
+        <div class="live-indicator"><span class="live-dot"></span> Live • Auto-refresh</div>
+    </div>
+
+    <div class="dashboard-layout">
+        <div class="main-column">
+            <div class="stats-row">
+                <div class="stat-box"><div class="stat-icon">📈</div><div class="val" id="dashInvested">UGX 0</div><div class="lbl">Invested</div></div>
+                <div class="stat-box"><div class="stat-icon">💰</div><div class="val" id="dashBalance">UGX 0</div><div class="lbl">Balance</div></div>
+                <div class="stat-box"><div class="stat-icon">📊</div><div class="val" id="dashInvestments">0</div><div class="lbl">Investments</div></div>
+                <div class="stat-box"><div class="stat-icon">💳</div><div class="val" id="dashLoans">0</div><div class="lbl">Loans</div></div>
+            </div>
+
+            <div class="section-card"><div class="section-header"><div class="section-icon icon-investments">📈</div><h4>My Investments</h4></div><div id="dashInvestmentsList"></div></div>
+            <div class="section-card"><div class="section-header"><div class="section-icon icon-savings">💰</div><h4>My Savings</h4></div><div id="dashSavingsList"></div></div>
+            <div class="section-card"><div class="section-header"><div class="section-icon icon-loans">💳</div><h4>My Loans</h4></div><div id="dashLoansList"></div></div>
+            <div class="section-card"><div class="section-header"><div class="section-icon icon-cycles">🔄</div><h4>My Cycles</h4></div><div id="dashCyclesList"></div></div>
+
+            <div style="text-align:center;margin:1rem 0;"><button class="btn-refresh" id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</button></div>
+
+            <div class="plans-slider-section">
+                <h3 class="slider-title">🔥 Available Investment Plans</h3>
+                <div class="slider-container"><div class="slider-track" id="plansSliderTrack"></div></div>
+            </div>
+        </div>
+
+        <div class="side-column">
+            <div class="side-section"><h4>📰 Latest News</h4><div id="newsFeed"></div></div>
+            <div class="side-section">
+                <h4>🔗 Quick Links</h4>
+                <ul class="side-list">
+                    <li onclick="location.href='investments.html'">💰 Investment Plans</li>
+                    <li onclick="location.href='cycles.html'">🔄 Join a Cycle</li>
+                    <li onclick="location.href='savings.html'">🏦 Open Savings</li>
+                    <li onclick="location.href='loans.html'">💳 Get a Loan</li>
+                </ul>
+            </div>
+            <div class="side-section">
+                <h4>📞 Need Help?</h4>
+                <ul class="side-list">
+                    <li>📱 0752259416</li>
+                    <li>📱 0746788042</li>
+                    <li><a href="https://wa.me/256752259416" style="color:#25D366;">💬 WhatsApp Admin</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PASSWORD MODAL -->
+<div class="modal-overlay" id="passwordModal">
+    <div class="modal-content">
+        <h3><i class="fas fa-key"></i> Change Password</h3>
+        <input type="password" id="oldPass" placeholder="Current Password">
+        <input type="password" id="newPass" placeholder="New Password">
+        <input type="password" id="confirmPass" placeholder="Confirm New Password">
+        <div class="msg msg-error" id="passError"></div>
+        <div class="msg msg-success" id="passSuccess"></div>
+        <div class="modal-buttons">
+            <button class="btn-danger" id="closeModalBtn">Cancel</button>
+            <button class="btn-success" id="updatePassBtn">Update</button>
+        </div>
+    </div>
+</div>
+
+<footer>© 2026 SHIMOGY Investment Group — Partners for Life | Kawempe, Kampala</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // ---------- SINGLE SCRIPT BLOCK – NO DUPLICATES ----------
+    (function() {
+        // Supabase config
+        const SUPABASE_URL = 'https://kmayxgyjkgccpnarpfnw.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_HqsxgO9VoKr60ahCjw-0Aw_WmCcKuFA';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentMember = null;
+        let autoRefreshInterval = null;
+        let investmentPlans = [];
+
+        // Helper
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                let d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+            } catch(e) { return dateStr.substring(0,10); }
+        }
+
+        // Fetch full member data (including related tables)
+        async function fetchMemberData(phone) {
+            const { data: member, error } = await supabase
+                .from('members')
+                .select('*')
+                .eq('phone', phone)
+                .single();
+            if (error || !member) {
+                console.error('Member fetch error:', error);
+                return null;
+            }
+            const [invest, save, loan, cycle] = await Promise.all([
+                supabase.from('investments').select('*').eq('member_phone', phone),
+                supabase.from('savings').select('*').eq('member_phone', phone),
+                supabase.from('loans').select('*').eq('member_phone', phone),
+                supabase.from('cycles').select('*').eq('member_phone', phone)
+            ]);
+            member.investments = invest.data || [];
+            member.savings = save.data || [];
+            member.loans = loan.data || [];
+            member.cycles = cycle.data || [];
+            return member;
+        }
+
+        // Render dashboard
+        function updateDashboardDisplay() {
+            if (!currentMember) return;
+            document.getElementById('dashName').textContent = currentMember.name || 'Member';
+            document.getElementById('dashJoined').textContent = formatDate(currentMember.created_at) || '-';
+            document.getElementById('dashGroup').textContent = currentMember.group_name || 'Not assigned';
+            document.getElementById('dashInvested').textContent = 'UGX ' + (parseInt(currentMember.total_invested || 0)).toLocaleString();
+            document.getElementById('dashBalance').textContent = 'UGX ' + (parseInt(currentMember.balance || 0)).toLocaleString();
+            document.getElementById('dashInvestments').textContent = currentMember.investments.length;
+            document.getElementById('dashLoans').textContent = currentMember.loans.length;
+            let initials = (currentMember.name || 'M').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+            document.getElementById('dashAvatar').textContent = initials || '👤';
+
+            renderSection('dashInvestmentsList', currentMember.investments, 'plan_name', 'amount', 'status', 'created_at');
+            renderSection('dashSavingsList', currentMember.savings, 'account_type', 'balance', 'status', 'created_at');
+            renderSection('dashLoansList', currentMember.loans, 'amount', 'purpose', 'status', 'created_at');
+            renderSection('dashCyclesList', currentMember.cycles, 'cycle_name', 'contribution', 'status', 'created_at');
+        }
+
+        function renderSection(containerId, items, primaryField, secondaryField, statusField, dateField) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (!items.length) { container.innerHTML = '<p class="empty-msg">No records yet.</p>'; return; }
+            let html = '';
+            items.forEach(item => {
+                let primary = item[primaryField] || 'N/A';
+                if (primaryField === 'amount' || primaryField === 'contribution') primary = 'UGX ' + (parseInt(item[primaryField] || 0)).toLocaleString();
+                let secondary = item[secondaryField];
+                if (secondaryField === 'balance' && secondary) secondary = 'UGX ' + parseInt(secondary).toLocaleString();
+                let status = item[statusField] || 'pending';
+                let badgeClass = 'badge-info';
+                if (status === 'active' || status === 'approved') badgeClass = 'badge-active';
+                else if (status === 'pending') badgeClass = 'badge-pending';
+                let date = item[dateField] ? '📅 ' + formatDate(item[dateField]) : '';
+                html += `<div class="item-row">
+                            <span style="font-weight:500;">${primary}</span>
+                            ${secondary ? `<span style="color:rgba(255,255,255,0.45);font-size:0.72rem;">${secondary}</span>` : ''}
+                            ${date ? `<span style="color:rgba(255,255,255,0.3);font-size:0.68rem;">${date}</span>` : ''}
+                            <span class="badge ${badgeClass}">${status}</span>
+                         </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // Auto refresh
+        async function refreshDashboardSilent() {
+            if (!currentMember) return;
+            const fresh = await fetchMemberData(currentMember.phone);
+            if (fresh) { currentMember = fresh; localStorage.setItem('shimogy_member', JSON.stringify(currentMember)); updateDashboardDisplay(); }
+        }
+        async function refreshDashboard() {
+            await refreshDashboardSilent();
+            await fetchPlansForSlider();
+            await fetchNewsFeed();
+            const btn = document.getElementById('refreshBtn');
+            if (btn) { btn.innerHTML = '✅ Refreshed!'; setTimeout(() => btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh', 2000); }
+        }
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(() => refreshDashboardSilent(), 30000);
+        }
+
+        // Investment plans slider
+        async function fetchPlansForSlider() {
+            const { data, error } = await supabase.from('investment_plans').select('*').eq('status', 'available').order('price');
+            if (error) return;
+            investmentPlans = data || [];
+            const track = document.getElementById('plansSliderTrack');
+            if (!track) return;
+            if (!investmentPlans.length) { track.innerHTML = '<div style="color:rgba(255,255,255,0.3);text-align:center;">No plans available</div>'; return; }
+            const slides = [...investmentPlans, ...investmentPlans];
+            track.innerHTML = slides.map(p => {
+                let badgeHtml = '';
+                const b = (p.badge || '').toLowerCase();
+                if (b === 'new') badgeHtml = '<span class="slider-badge badge-new">NEW</span>';
+                else if (b === 'hot') badgeHtml = '<span class="slider-badge badge-hot">HOT</span>';
+                else if (b === 'trending') badgeHtml = '<span class="slider-badge badge-trending">TRENDING</span>';
+                const img = p.image_url || '';
+                return `<div class="slider-card" onclick="window.open('investments.html','_blank')">
+                            <div class="slider-img" style="background-image:url('${img}');">${badgeHtml}</div>
+                            <div class="slider-body">
+                                <h5>${p.name}</h5>
+                                <div class="slider-invest">Invest: UGX ${(parseInt(p.price)||0).toLocaleString()}</div>
+                                <div class="slider-return">Return: UGX ${(parseInt(p.expected_return)||0).toLocaleString()}</div>
+                            </div>
+                        </div>`;
+            }).join('');
+        }
+
+        // News feed
+        async function fetchNewsFeed() {
+            const { data, error } = await supabase.from('updates').select('*').eq('status', 'published').order('published_date', { ascending: false }).limit(5);
+            const container = document.getElementById('newsFeed');
+            if (error || !data || !data.length) { container.innerHTML = '<p style="color:rgba(255,255,255,0.2);font-size:0.73rem;">No news yet.</p>'; return; }
+            container.innerHTML = data.map(u => {
+                let tagClass = 'tag-news';
+                if (u.category === 'story') tagClass = 'tag-story';
+                else if (u.category === 'tip') tagClass = 'tag-tip';
+                return `<div class="news-item" onclick="alert('${(u.detail || u.excerpt || '').replace(/'/g, "\\'")}')">
+                            <span class="news-tag ${tagClass}">${(u.category || 'news').toUpperCase()}</span>
+                            <h5>${u.title}</h5>
+                            <span class="news-date">📅 ${formatDate(u.published_date)}</span>
+                        </div>`;
+            }).join('');
+        }
+
+        // ---------- LOGIN ----------
+        async function memberLogin() {
+            const phone = document.getElementById('mPhone').value.trim();
+            const password = document.getElementById('mPassword').value.trim();
+            const errorDiv = document.getElementById('loginError');
+            errorDiv.style.display = 'none';
+            if (!phone || !password) {
+                errorDiv.textContent = 'Enter phone and password.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            try {
+                const { data: member, error } = await supabase.from('members').select('*').eq('phone', phone).single();
+                if (error || !member) {
+                    errorDiv.textContent = 'Phone number not found.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                // Use password_hash (adjust to your column if needed)
+                if (member.password_hash !== password) {
+                    errorDiv.textContent = 'Wrong password.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                const full = await fetchMemberData(phone);
+                if (!full) throw new Error('Failed to load member data');
+                currentMember = full;
+                localStorage.setItem('shimogy_member', JSON.stringify(currentMember));
+                document.getElementById('loginWrap').style.display = 'none';
+                document.getElementById('dashContent').style.display = 'block';
+                document.getElementById('logoutBtn').style.display = 'inline-flex';
+                document.getElementById('passBtn').style.display = 'inline-flex';
+                updateDashboardDisplay();
+                startAutoRefresh();
+                fetchPlansForSlider();
+                fetchNewsFeed();
+            } catch (err) {
+                console.error(err);
+                errorDiv.textContent = 'Login error: ' + err.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Logout
+        function memberLogout() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            currentMember = null;
+            localStorage.removeItem('shimogy_member');
+            document.getElementById('loginWrap').style.display = 'flex';
+            document.getElementById('dashContent').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('passBtn').style.display = 'none';
+        }
+
+        // Change Password modal
+        function openPasswordModal() {
+            document.getElementById('oldPass').value = '';
+            document.getElementById('newPass').value = '';
+            document.getElementById('confirmPass').value = '';
+            document.getElementById('passError').style.display = 'none';
+            document.getElementById('passSuccess').style.display = 'none';
+            document.getElementById('passwordModal').classList.add('active');
+        }
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.remove('active');
+        }
+        async function changePassword() {
+            const oldPass = document.getElementById('oldPass').value.trim();
+            const newPass = document.getElementById('newPass').value.trim();
+            const confirm = document.getElementById('confirmPass').value.trim();
+            const errorDiv = document.getElementById('passError');
+            const successDiv = document.getElementById('passSuccess');
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            if (!oldPass || !newPass || !confirm) {
+                errorDiv.textContent = 'All fields required.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (oldPass !== currentMember.password_hash) {
+                errorDiv.textContent = 'Current password is wrong.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (newPass !== confirm) {
+                errorDiv.textContent = 'New passwords do not match.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (newPass.length < 4) {
+                errorDiv.textContent = 'Minimum 4 characters.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            const { error } = await supabase.from('members').update({ password_hash: newPass }).eq('phone', currentMember.phone);
+            if (error) {
+                errorDiv.textContent = 'Update failed: ' + error.message;
+                errorDiv.style.display = 'block';
+            } else {
+                currentMember.password_hash = newPass;
+                localStorage.setItem('shimogy_member', JSON.stringify(currentMember));
+                successDiv.textContent = '✅ Password updated!';
+                successDiv.style.display = 'block';
+                setTimeout(closePasswordModal, 2000);
+            }
+        }
+
+        // Attach event listeners (instead of inline onclick – avoids duplication)
+        document.getElementById('loginBtn').addEventListener('click', memberLogin);
+        document.getElementById('logoutBtn').addEventListener('click', memberLogout);
+        document.getElementById('passBtn').addEventListener('click', openPasswordModal);
+        document.getElementById('closeModalBtn').addEventListener('click', closePasswordModal);
+        document.getElementById('updatePassBtn').addEventListener('click', changePassword);
+        document.getElementById('refreshBtn').addEventListener('click', refreshDashboard);
+
+        // Set today's date
+        document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+        // Background particles
+        (function(){
+            const c = document.getElementById('bgParticles');
+            if(c) for(let i=0;i<30;i++){ let d=document.createElement('div'); d.classList.add('bg-dot'); d.style.left=Math.random()*100+'%'; d.style.animationDuration=(Math.random()*12+8)+'s'; d.style.animationDelay=Math.random()*8+'s'; c.appendChild(d); }
+        })();
+
+        // Check saved session
+        const saved = localStorage.getItem('shimogy_member');
+        if (saved) {
+            try {
+                currentMember = JSON.parse(saved);
+                document.getElementById('loginWrap').style.display = 'none';
+                document.getElementById('dashContent').style.display = 'block';
+                document.getElementById('logoutBtn').style.display = 'inline-flex';
+                document.getElementById('passBtn').style.display = 'inline-flex';
+                updateDashboardDisplay();
+                startAutoRefresh();
+                fetchPlansForSlider();
+                fetchNewsFeed();
+                refreshDashboardSilent();
+            } catch(e) { localStorage.removeItem('shimogy_member'); }
+        }
+    })();
+</script>
+</body>
+</html>

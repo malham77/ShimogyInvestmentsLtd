@@ -1,0 +1,608 @@
+<!-- index.html - Supabase Clean Version (no duplicate declarations) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIMOGY | Smart Investment Group - Partners for Life | Uganda</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ========== YOUR ORIGINAL CSS (kept exactly the same) ========== */
+        @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700;6..96,800;6..96,900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { overflow-x: hidden; width: 100%; height: 100%; }
+        body { 
+            background: #060d1a; min-height: 100vh; font-family: 'Inter', sans-serif; 
+            color: white; overflow-x: hidden; line-height: 1.6; 
+            display: flex; flex-direction: column;
+        }
+
+        .water-ripple { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid rgba(0,180,216,0.06); animation: rippleExpand 4s infinite ease-out; z-index: 0; pointer-events: none; }
+        .water-ripple:nth-child(1) { width: 600px; height: 600px; }
+        .water-ripple:nth-child(2) { animation-delay: 0.8s; width: 500px; height: 500px; }
+        .water-ripple:nth-child(3) { animation-delay: 1.6s; width: 400px; height: 400px; }
+        @keyframes rippleExpand { 0% { transform: translate(-50%,-50%) scale(0.5); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; } }
+
+        .floating-dots { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .dot { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(0,180,216,0.4), rgba(0,180,216,0)); animation: floatDot 8s infinite ease-in-out; }
+        @keyframes floatDot { 0%,100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.3; } 25% { transform: translateY(-100px) translateX(50px) scale(1.5); opacity: 0.6; } 50% { transform: translateY(-50px) translateX(-30px) scale(1); opacity: 0.3; } 75% { transform: translateY(-150px) translateX(-50px) scale(1.8); opacity: 0.5; } }
+
+        .navbar { background: rgba(6,13,26,0.92); backdrop-filter: blur(20px); padding: 0.8rem 2rem; position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid rgba(0,180,216,0.2); box-shadow: 0 4px 30px rgba(0,0,0,0.5); }
+        .nav-container { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo-area { display: flex; align-items: center; gap: 12px; cursor: pointer; text-decoration: none; }
+        .logo-image { width: 55px; height: 55px; border-radius: 14px; object-fit: cover; box-shadow: 0 0 20px rgba(0,180,216,0.3); }
+        .logo-text h1 { font-family: 'Bodoni Moda', serif; font-size: 1.6rem; font-weight: 900; background: linear-gradient(135deg, #ffffff, #48cae4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; letter-spacing: 2px; }
+        .logo-text p { font-size: 0.6rem; letter-spacing: 4px; color: #48cae4; font-weight: 600; }
+        .nav-links { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+        .nav-links a { text-decoration: none; font-weight: 500; color: rgba(255,255,255,0.85); transition: 0.3s; padding: 0.5rem 0; position: relative; font-size: 0.85rem; }
+        .nav-links a::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0%; height: 2px; background: linear-gradient(90deg, #00b4d8, #48cae4); transition: width 0.3s; }
+        .nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
+        .nav-links a:hover, .nav-links a.active { color: #48cae4; }
+        .account-icon { width: 42px; height: 42px; background: linear-gradient(135deg, #00b4d8, #0077b6); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; font-size: 1.2rem; color: white; box-shadow: 0 0 15px rgba(0,180,216,0.3); }
+        .account-icon:hover { transform: scale(1.1); }
+
+        .hero-fullscreen { position: relative; min-height: 100vh; display: flex; align-items: center; background: url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1920&h=1080&fit=crop') center/cover no-repeat; background-attachment: fixed; z-index: 1; }
+        .hero-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(6,13,26,0.92) 0%, rgba(6,20,40,0.85) 100%); }
+        .hero-content-wrapper { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(0,180,216,0.12); border: 1px solid rgba(0,180,216,0.3); padding: 8px 18px; border-radius: 50px; font-size: 0.8rem; color: #48cae4; margin-bottom: 1.5rem; }
+        .hero-badge .live-dot { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; animation: livePulse 1.5s infinite; }
+        @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .hero-title-main { font-family: 'Playfair Display', serif; font-size: 3.5rem; font-weight: 900; line-height: 1.15; margin-bottom: 1.5rem; background: linear-gradient(135deg, #ffffff 0%, #48cae4 40%, #ffffff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero-description { font-size: 1.1rem; color: rgba(255,255,255,0.75); margin-bottom: 2.5rem; line-height: 1.7; }
+        .hero-buttons { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .btn-primary-large { background: linear-gradient(135deg, #00b4d8, #0077b6); border: none; padding: 15px 35px; border-radius: 50px; font-weight: 700; font-size: 1rem; color: white; cursor: pointer; transition: 0.3s; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(0,180,216,0.3); }
+        .btn-primary-large:hover { transform: translateY(-3px); box-shadow: 0 15px 40px rgba(0,180,216,0.5); }
+        .btn-outline-large { background: transparent; border: 2px solid rgba(0,180,216,0.5); padding: 15px 35px; border-radius: 50px; font-weight: 600; font-size: 1rem; color: #48cae4; cursor: pointer; transition: 0.3s; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
+        .btn-outline-large:hover { background: rgba(0,180,216,0.1); border-color: #48cae4; color: white; }
+
+        .hero-right { position: relative; }
+        .floating-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 1.5rem; margin-bottom: 1rem; animation: floatCard 6s infinite ease-in-out; transition: all 0.3s; }
+        .floating-card:nth-child(2) { animation-delay: 1s; }
+        .floating-card:nth-child(3) { animation-delay: 2s; }
+        .floating-card:nth-child(4) { animation-delay: 3s; }
+        @keyframes floatCard { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
+        .floating-card:hover { border-color: rgba(0,180,216,0.5); }
+        .floating-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
+        .floating-card-header h4 { color: #48cae4; font-size: 1rem; }
+        .floating-card .return-badge { background: rgba(0,230,118,0.15); color: #00e676; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+
+        .hero-stats-bar { display: flex; gap: 2rem; margin-top: 3rem; flex-wrap: wrap; }
+        .hero-stat-item { text-align: center; }
+        .hero-stat-item .stat-value { font-size: 2rem; font-weight: 900; color: #ffd700; }
+        .hero-stat-item .stat-label { font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+
+        .section-dark { padding: 4rem 2rem 2rem; position: relative; z-index: 1; background: rgba(0,0,0,0.3); }
+        .section-image-bg { padding: 4rem 2rem 2rem; position: relative; z-index: 1; background-size: cover; background-position: center; background-attachment: fixed; }
+        .section-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6,13,26,0.9); }
+        .section-content { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; }
+        .section-header { text-align: center; margin-bottom: 2.5rem; }
+        .section-header .section-tag { display: inline-block; color: #48cae4; font-size: 0.85rem; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 1rem; }
+        .section-header h2 { font-family: 'Playfair Display', serif; font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem; background: linear-gradient(135deg, #ffffff, #48cae4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .section-header p { font-size: 1.1rem; color: rgba(255,255,255,0.65); max-width: 600px; margin: 0 auto; }
+
+        .showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; }
+        .showcase-card { position: relative; border-radius: 24px; overflow: hidden; height: 450px; cursor: pointer; transition: all 0.4s; border: 1px solid rgba(255,255,255,0.1); }
+        .showcase-card:hover { transform: translateY(-10px); border-color: rgba(0,180,216,0.5); }
+        .showcase-card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+        .showcase-card:hover .showcase-card-img { transform: scale(1.1); }
+        .showcase-card-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 2rem; background: linear-gradient(transparent, rgba(0,0,0,0.9)); }
+        .showcase-card-overlay h3 { font-size: 1.3rem; margin-bottom: 0.5rem; color: white; }
+        .showcase-card-overlay .meta-info { display: flex; gap: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem; flex-wrap: wrap; }
+        .showcase-card-badge { position: absolute; top: 1rem; right: 1rem; padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+        .invest-price { font-size: 0.85rem; color: rgba(255,255,255,0.7); }
+        .return-price { font-size: 1.4rem; font-weight: 800; color: #00e676; }
+
+        .timeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; }
+        .timeline-card { text-align: center; padding: 2rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; transition: all 0.3s; }
+        .timeline-card:hover { border-color: rgba(0,180,216,0.3); transform: translateY(-5px); }
+        .timeline-number { width: 70px; height: 70px; background: linear-gradient(135deg, #00b4d8, #0077b6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 900; margin: 0 auto 1.5rem; box-shadow: 0 10px 30px rgba(0,180,216,0.3); border: 3px solid rgba(255,255,255,0.2); }
+        .timeline-card h3 { font-size: 1.2rem; margin-bottom: 0.8rem; color: #48cae4; }
+        .timeline-card p { color: rgba(255,255,255,0.65); font-size: 0.9rem; line-height: 1.6; }
+
+        .testimonial-card-modern { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 2rem; transition: all 0.3s; }
+        .testimonial-card-modern:hover { border-color: rgba(0,180,216,0.3); }
+        .testimonial-avatar-large { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 3px solid #00b4d8; margin-bottom: 1rem; }
+        .testimonial-text { font-size: 1rem; color: rgba(255,255,255,0.8); line-height: 1.7; font-style: italic; margin-bottom: 1rem; }
+        .testimonial-author { font-weight: 700; color: #48cae4; }
+        .testimonial-role { font-size: 0.8rem; color: rgba(255,255,255,0.5); }
+
+        .stats-counter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; text-align: center; }
+        .stat-counter-item { padding: 2rem; }
+        .stat-counter-number { font-size: 3rem; font-weight: 900; color: #ffd700; margin-bottom: 0.5rem; }
+        .stat-counter-label { color: rgba(255,255,255,0.7); font-size: 0.95rem; }
+
+        .slider-section { padding: 1rem 0; }
+        .slider-container { width: 100%; overflow: hidden; }
+        .slider-track { display: flex; gap: 1.5rem; animation: slideRightToLeft 40s linear infinite; width: fit-content; }
+        .slider-track:hover { animation-play-state: paused; }
+        @keyframes slideRightToLeft { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .slider-card-modern { min-width: 280px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; overflow: hidden; transition: all 0.3s; cursor: pointer; }
+        .slider-card-modern:hover { border-color: rgba(0,180,216,0.4); transform: translateY(-5px); }
+        .slider-card-modern .slider-img { height: 160px; background-size: cover; background-position: center; position: relative; }
+        .slider-badge { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border-radius: 12px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; }
+        .badge-new { background: rgba(0,230,118,0.9); color: #000; }
+        .badge-hot { background: rgba(255,82,82,0.9); color: #fff; }
+        .badge-trending { background: rgba(255,152,0,0.9); color: #000; }
+        .slider-card-modern .slider-body { padding: 1rem; text-align: center; }
+        .slider-card-modern .slider-body h4 { color: #48cae4; font-size: 0.9rem; }
+        .slider-invest { color: rgba(255,255,255,0.5); font-size: 0.7rem; }
+        .slider-return { color: #00e676; font-weight: 700; font-size: 0.9rem; }
+        .slider-roi { color: #00e676; font-size: 0.65rem; margin-top: 0.2rem; }
+
+        .cta-section { background: rgba(0,180,216,0.08); border: 1px solid rgba(0,180,216,0.2); border-radius: 30px; padding: 3rem 2rem; max-width: 800px; margin: 0 auto; }
+
+        .footer-modern { background: rgba(0,0,0,0.5); border-top: 1px solid rgba(0,180,216,0.2); padding: 2.5rem 2rem; position: relative; z-index: 1; margin-top: auto; }
+        .footer-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
+        .footer-col h4 { color: #48cae4; margin-bottom: 1rem; font-size: 1.1rem; }
+        .footer-col p, .footer-col a { color: rgba(255,255,255,0.6); font-size: 0.9rem; line-height: 2; text-decoration: none; transition: color 0.3s; }
+        .footer-col a:hover { color: #48cae4; }
+        .social-icons-large a { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); margin-right: 10px; color: rgba(255,255,255,0.6); transition: all 0.3s; font-size: 1rem; }
+        .social-icons-large a:hover { border-color: #00b4d8; color: #00b4d8; background: rgba(0,180,216,0.1); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6,13,26,0.95); backdrop-filter: blur(15px); display: flex; align-items: center; justify-content: center; z-index: 10000; visibility: hidden; opacity: 0; transition: 0.3s; }
+        .modal-overlay.active { visibility: visible; opacity: 1; }
+        .modal-content { background: linear-gradient(135deg, #0a1a35, #0d2247); border-radius: 24px; padding: 2.5rem; width: 90%; max-width: 450px; border: 1px solid rgba(0,180,216,0.4); box-shadow: 0 30px 60px rgba(0,0,0,0.6); }
+        .modal-content h3 { color: #48cae4; margin-bottom: 1.5rem; font-size: 1.3rem; text-align: center; }
+
+        .debug-box {
+            background: rgba(255,82,82,0.1);
+            border: 2px solid #ff5252;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin: 0 2rem 1rem;
+            color: #ff5252;
+            font-size: 0.9rem;
+            display: none;
+        }
+        .debug-box.success {
+            border-color: #00e676;
+            color: #00e676;
+            background: rgba(0,230,118,0.08);
+        }
+        .debug-box pre {
+            white-space: pre-wrap;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.7);
+        }
+
+        @media (max-width: 968px) { .hero-content-wrapper { grid-template-columns: 1fr; text-align: center; gap: 2rem; } .hero-title-main { font-size: 2.5rem; } .hero-right { display: none; } .hero-buttons { justify-content: center; } .hero-stats-bar { justify-content: center; } .section-header h2 { font-size: 2rem; } .showcase-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .nav-container { flex-direction: column; gap: 1rem; } .nav-links { gap: 0.8rem; justify-content: center; } .hero-fullscreen { min-height: auto; padding: 6rem 0; } .section-dark, .section-image-bg { padding: 3rem 1rem 1rem; } .debug-box { margin: 0 1rem 1rem; } }
+    </style>
+</head>
+<body>
+
+<div class="water-ripple"></div><div class="water-ripple"></div><div class="water-ripple"></div>
+<div class="floating-dots" id="floatingDots"></div>
+
+<nav class="navbar">
+    <div class="nav-container">
+        <a href="index.html" class="logo-area">
+            <img src="images/logobg.png" alt="SHIMOGY Logo" class="logo-image">
+            <div class="logo-text"><h1>SHIMOGY</h1><p>INVESTMENT GROUP</p></div>
+        </a>
+        <div class="nav-links">
+            <a href="index.html" class="active">Home</a>
+            <a href="investments.html">Investments</a>
+            <a href="cycles.html">Cycles</a>
+            <a href="savings.html">Savings</a>
+            <a href="loans.html">Loans</a>
+            <a href="updates.html">Updates</a>
+            <a href="about.html">About Us</a>
+            <div class="account-icon" onclick="showAccessModal()"><i class="fas fa-user-circle"></i></div>
+        </div>
+    </div>
+</nav>
+
+<!-- Debug Panel -->
+<div id="debugBox" class="debug-box">
+    <strong>⚠️ Database Connection Issue</strong>
+    <div id="debugMessage">Loading...</div>
+</div>
+
+<div id="accessModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3><i class="fas fa-key"></i> Access Dashboard</h3>
+        <p style="text-align:center;color:rgba(255,255,255,0.6);margin-bottom:1.5rem;">Choose your login portal</p>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            <button class="btn-primary-large" style="flex:1;justify-content:center;" onclick="location.href='admin.html'"><i class="fas fa-user-cog"></i> Admin</button>
+            <button class="btn-primary-large" style="flex:1;justify-content:center;background:linear-gradient(135deg,#1e7e34,#27ae60);" onclick="location.href='dashboard.html'"><i class="fas fa-user"></i> Client</button>
+        </div>
+        <button class="btn-outline-large" style="width:100%;margin-top:1rem;justify-content:center;" onclick="closeAccessModal()">Close</button>
+    </div>
+</div>
+
+<section class="hero-fullscreen">
+    <div class="hero-overlay"></div>
+    <div class="hero-content-wrapper">
+        <div class="hero-left">
+            <div class="hero-badge"><span class="live-dot"></span> LIVE — Real-time Investments</div>
+            <h1 class="hero-title-main">Grow Your Wealth<br>With Smart Investments</h1>
+            <p class="hero-description">Take control of your financial journey with smart, strategic investments designed to grow your income steadily over time.</p>
+            <h1 class="hero-title-main" style="font-size:2rem;">Money For Money. Nothing Changes If Nothing Changes!!</h1>
+            <p class="hero-description">Step into a world where your money is actively working for you through carefully structured opportunities built for consistency and growth.</p>
+            <div class="hero-buttons">
+                <a href="investments.html" class="btn-primary-large"><i class="fas fa-rocket"></i> Explore Investments</a>
+                <a href="about.html" class="btn-outline-large"><i class="fas fa-play"></i> How It Works</a>
+            </div>
+            <div class="hero-stats-bar">
+                <div class="hero-stat-item"><div class="stat-value">200+</div><div class="stat-label">Active Members</div></div>
+                <div class="hero-stat-item"><div class="stat-value">UGX 50M</div><div class="stat-label">Total Invested</div></div>
+                <div class="hero-stat-item"><div class="stat-value">98%</div><div class="stat-label">Success Rate</div></div>
+                <div class="hero-stat-item"><div class="stat-value">24/7</div><div class="stat-label">Support Available</div></div>
+            </div>
+        </div>
+        <div class="hero-right" id="heroFloatingCards"></div>
+    </div>
+</section>
+
+<section class="section-image-bg" style="background-image:url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1920&h=1080&fit=crop');">
+    <div class="section-overlay"></div>
+    <div class="section-content">
+        <div class="section-header"><div class="section-tag">Investment Opportunities</div><h2>Featured Investment Plans</h2><p>Select from our carefully curated investment opportunities</p></div>
+        <div class="showcase-grid" id="showcaseGrid"></div>
+        <div style="text-align:center;margin-top:2rem;"><a href="investments.html" class="btn-primary-large">View All Investment Plans <i class="fas fa-arrow-right"></i></a></div>
+    </div>
+</section>
+
+<section class="section-dark">
+    <div class="section-content">
+        <div class="section-header"><div class="section-tag">Simple Process</div><h2>How SHIMOGY Works</h2><p>Four simple steps to start growing your wealth</p></div>
+        <div class="timeline-grid">
+            <div class="timeline-card"><div class="timeline-number">01</div><h3>Choose Investment</h3><p>Browse our diverse portfolio of investment opportunities.</p></div>
+            <div class="timeline-card"><div class="timeline-number">02</div><h3>Submit Request</h3><p>Click "Invest Now", fill in your details. Admin reviews instantly.</p></div>
+            <div class="timeline-card"><div class="timeline-number">03</div><h3>Secure Payment</h3><p>Admin calls to confirm and provides payment details.</p></div>
+            <div class="timeline-card"><div class="timeline-number">04</div><h3>Track & Earn</h3><p>Log into your dashboard to track progress. Receive returns on schedule.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="section-image-bg" style="background-image:url('https://images.unsplash.com/photo-1553484771-371a605b060b?w=1920&h=600&fit=crop');">
+    <div class="section-overlay"></div>
+    <div class="section-content">
+        <div class="stats-counter-grid">
+            <div class="stat-counter-item"><div class="stat-counter-number">200+</div><div class="stat-counter-label">Active Investors</div></div>
+            <div class="stat-counter-item"><div class="stat-counter-number">UGX 50M</div><div class="stat-counter-label">Capital Deployed</div></div>
+            <div class="stat-counter-item"><div class="stat-counter-number" id="planCount">-</div><div class="stat-counter-label">Investment Plans</div></div>
+            <div class="stat-counter-item"><div class="stat-counter-number">98%</div><div class="stat-counter-label">Client Satisfaction</div></div>
+            <div class="stat-counter-item"><div class="stat-counter-number">2+</div><div class="stat-counter-label">Years Experience</div></div>
+        </div>
+    </div>
+</section>
+
+<section class="section-dark">
+    <div class="section-content">
+        <div class="section-header"><div class="section-tag">Live Markets</div><h2>🔥 Trending Now</h2><p>Our most popular investments this week</p></div>
+        <div class="slider-section"><div class="slider-container"><div class="slider-track" id="sliderTrack"></div></div></div>
+    </div>
+</section>
+
+<section class="section-image-bg" style="background-image:url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1920&h=800&fit=crop');">
+    <div class="section-overlay"></div>
+    <div class="section-content">
+        <div class="section-header"><div class="section-tag">Success Stories</div><h2>What Our Investors Say</h2><p>Real testimonials from our growing community</p></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2rem;">
+            <div class="testimonial-card-modern"><img src="images/josephine.jpg" alt="Josephine" class="testimonial-avatar-large"><p class="testimonial-text">Shimogy Investment Group has helped me get closer to my future through giving out large profits from investments and low interest rates.</p><div class="testimonial-author">Nansikombi Josephine</div><div class="testimonial-role">Client</div></div>
+            <div class="testimonial-card-modern"><img src="images/Namala.jpg" alt="Namala" class="testimonial-avatar-large"><p class="testimonial-text">I am from Mbarara and I save with Shimogy Investment Group. This is the best company. The cycles program changed my saving habits.</p><div class="testimonial-author">Namala Florence</div><div class="testimonial-role">Client</div></div>
+            <div class="testimonial-card-modern"><img src="images/patrick.jpg" alt="Patrick" class="testimonial-avatar-large"><p class="testimonial-text">Transparency is what sets SHIMOGY apart. The dashboard shows everything in real-time. I've already reinvested twice.</p><div class="testimonial-author">Mbabali Patrick</div><div class="testimonial-role">Investor</div></div>
+        </div>
+    </div>
+</section>
+
+<section class="section-dark">
+    <div class="section-content" style="text-align:center;">
+        <div class="cta-section">
+            <div class="section-tag">Get Started Today</div>
+            <h2 style="font-family:'Playfair Display',serif;font-size:2.5rem;margin-bottom:1rem;">Ready to Build Your Wealth?</h2>
+            <p style="color:rgba(255,255,255,0.65);margin-bottom:2rem;line-height:1.7;" id="ctaText">Loading plans...</p>
+            <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+                <a href="investments.html" class="btn-primary-large"><i class="fas fa-rocket"></i> Start Investing Now</a>
+                <a href="dashboard.html" class="btn-outline-large"><i class="fas fa-chart-line"></i> Client Dashboard</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer-modern">
+    <div class="footer-grid-4">
+        <div class="footer-col"><h4>🏢 SHIMOGY Group</h4><p>Smart investments for a brighter future. Partners for life since 2023.</p><div class="social-icons-large" style="margin-top:1rem;"><a href="#"><i class="fab fa-facebook-f"></i></a><a href="#"><i class="fab fa-tiktok"></i></a><a href="https://wa.me/256752259416"><i class="fab fa-whatsapp"></i></a></div></div>
+        <div class="footer-col"><h4>📋 Quick Links</h4><p><a href="investments.html">Investments</a></p><p><a href="cycles.html">Cycles</a></p><p><a href="savings.html">Savings</a></p><p><a href="loans.html">Loans</a></p></div>
+        <div class="footer-col"><h4>📞 Contact Us</h4><p><i class="fas fa-phone"></i> 0752259416</p><p>0746788042</p><p><i class="fas fa-map-marker-alt"></i> Kawempe, Kampala</p></div>
+        <div class="footer-col"><h4>🔒 Account</h4><p><a href="dashboard.html">Client Login</a></p><p><a href="admin.html">Admin Portal</a></p><p><a href="about.html">About Us</a></p></div>
+    </div>
+    <div style="text-align:center;margin-top:2rem;padding-top:1.5rem;border-top:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);font-size:0.85rem;">© 2026 Shimogy Investment Group — Partners for Life | All Rights Reserved</div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // ========== SINGLE SCRIPT BLOCK – NO DUPLICATE DECLARATION ==========
+    (function() {
+        // Use a unique variable name to avoid conflicts
+        const SB_URL = 'https://kmayxgyjkgccpnarpfnw.supabase.co';
+        const SB_ANON_KEY = 'sb_publishable_HqsxgO9VoKr60ahCjw-0Aw_WmCcKuFA';
+
+        let sbClient;
+        try {
+            sbClient = window.supabase.createClient(SB_URL, SB_ANON_KEY);
+        } catch (e) {
+            showDebug('❌ Supabase client initialization failed: ' + e.message, true);
+            sbClient = null;
+        }
+
+        let investmentPlans = [];
+
+        // ---------- Debug Panel ----------
+        function showDebug(msg, isError = true) {
+            const box = document.getElementById('debugBox');
+            const msgDiv = document.getElementById('debugMessage');
+            if (!box || !msgDiv) return;
+            box.style.display = 'block';
+            box.className = 'debug-box' + (isError ? '' : ' success');
+            msgDiv.innerHTML = msg;
+        }
+
+        function hideDebug() {
+            const box = document.getElementById('debugBox');
+            if (box) box.style.display = 'none';
+        }
+
+        // ---------- Dots (cosmetic) ----------
+        (function createDots() {
+            const c = document.getElementById('floatingDots');
+            if (!c) return;
+            for (let i = 0; i < 20; i++) {
+                const d = document.createElement('div');
+                d.classList.add('dot');
+                d.style.width = (Math.random() * 6 + 3) + 'px';
+                d.style.height = d.style.width;
+                d.style.left = Math.random() * 100 + '%';
+                d.style.bottom = Math.random() * 100 + '%';
+                d.style.animationDuration = (Math.random() * 10 + 5) + 's';
+                d.style.animationDelay = Math.random() * 5 + 's';
+                c.appendChild(d);
+            }
+        })();
+
+        // ---------- Fetch Plans ----------
+        async function fetchPlans() {
+            if (!sbClient) {
+                showDebug('❌ Supabase client not available. Check internet and ad blockers.', true);
+                return;
+            }
+
+            try {
+                showDebug('🔄 Fetching investment plans from Supabase...', false);
+
+                const { data, error } = await sbClient
+                    .from('investment_plans')
+                    .select('*')
+                    .order('price', { ascending: true });
+
+                if (error) {
+                    let errorMsg = error.message;
+                    if (errorMsg.includes('permission denied')) {
+                        errorMsg = '⚠️ <strong>Permission denied.</strong> Please disable RLS on the "investment_plans" table in Supabase SQL Editor: <code>ALTER TABLE investment_plans DISABLE ROW LEVEL SECURITY;</code>';
+                    } else if (errorMsg.includes('relation') && errorMsg.includes('does not exist')) {
+                        errorMsg = '⚠️ <strong>Table "investment_plans" does not exist.</strong> Please create the table with the required columns: id, name, price, expected_return, duration, risk, risk_level, image_url, slots_left, status, badge.';
+                    }
+                    showDebug('❌ ' + errorMsg, true);
+                    // Fallback to default plans
+                    investmentPlans = getDefaultPlans();
+                    renderAllDynamic();
+                    updateCTA();
+                    updatePlanCount();
+                    return;
+                }
+
+                if (!data || data.length === 0) {
+                    showDebug('⚠️ No investment plans found in the database. Add some plans via the Admin panel.', false);
+                    investmentPlans = getDefaultPlans();
+                    renderAllDynamic();
+                    updateCTA();
+                    updatePlanCount();
+                    return;
+                }
+
+                // Success – hide debug
+                hideDebug();
+
+                // Map columns
+                investmentPlans = data.map(plan => ({
+                    ID: plan.id,
+                    Name: plan.name,
+                    Price: plan.price,
+                    Return: plan.expected_return,
+                    Duration: plan.duration,
+                    Risk: plan.risk,
+                    RiskLevel: plan.risk_level || (plan.risk === 'Low' ? 1 : plan.risk === 'Medium' ? 2 : 3),
+                    ImageURL: plan.image_url,
+                    SlotsLeft: plan.slots_left,
+                    Status: plan.status,
+                    Badge: plan.badge
+                }));
+
+                renderAllDynamic();
+                updateCTA();
+                updatePlanCount();
+
+            } catch (err) {
+                console.error('Fetch error:', err);
+                showDebug('❌ Error fetching plans: ' + err.message, true);
+                investmentPlans = getDefaultPlans();
+                renderAllDynamic();
+                updateCTA();
+                updatePlanCount();
+            }
+        }
+
+        // ---------- Default fallback plans ----------
+        function getDefaultPlans() {
+            return [
+                { ID:1, Name:"MEN'S HAIR SALON", Price:200000, Return:250000, Duration:"30 DAYS", Risk:"Low", RiskLevel:1, ImageURL:"images/saloon.jpg", SlotsLeft:5, Status:"available", Badge:"new" },
+                { ID:2, Name:"POULTRY FARM", Price:500000, Return:700000, Duration:"60 DAYS", Risk:"Low", RiskLevel:1, ImageURL:"images/poultry.jpg", SlotsLeft:3, Status:"available", Badge:"hot" },
+                { ID:3, Name:"RESTAURANT", Price:500000, Return:700000, Duration:"45 DAYS", Risk:"Medium", RiskLevel:2, ImageURL:"images/restaurant.jpg", SlotsLeft:4, Status:"available", Badge:"trending" },
+                { ID:4, Name:"MODERN STALL", Price:50000, Return:62000, Duration:"30 DAYS", Risk:"Low", RiskLevel:1, ImageURL:"https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&h=400&fit=crop", SlotsLeft:8, Status:"available", Badge:"new" },
+                { ID:5, Name:"CLASSIC BOUTIQUE", Price:100000, Return:120000, Duration:"30 DAYS", Risk:"Low", RiskLevel:1, ImageURL:"https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop", SlotsLeft:6, Status:"available", Badge:"" },
+                { ID:6, Name:"GROCERY STORE", Price:800000, Return:1200000, Duration:"60 DAYS", Risk:"Medium", RiskLevel:2, ImageURL:"https://images.unsplash.com/photo-1515169067868-5387ec356754?w=600&h=400&fit=crop", SlotsLeft:2, Status:"available", Badge:"hot" },
+                { ID:7, Name:"TRANSPORT BUSINESS", Price:1000000, Return:1500000, Duration:"90 DAYS", Risk:"High", RiskLevel:3, ImageURL:"images/transport.jpg", SlotsLeft:1, Status:"available", Badge:"trending" },
+                { ID:8, Name:"MODERN CONSTRUCTION", Price:2500000, Return:3500000, Duration:"120 DAYS", Risk:"Low", RiskLevel:1, ImageURL:"images/construction.jpg", SlotsLeft:2, Status:"available", Badge:"" }
+            ];
+        }
+
+        // ---------- Update UI ----------
+        function updateCTA() {
+            const el = document.getElementById('ctaText');
+            if (investmentPlans.length > 0) {
+                const prices = investmentPlans.map(p => parseInt(p.Price) || 0).filter(p => p > 0);
+                if (prices.length) {
+                    el.textContent = `Join Ugandans who are already growing their money with SHIMOGY. Whether starting with UGX ${Math.min(...prices).toLocaleString()} or UGX ${Math.max(...prices).toLocaleString()}, we have the right plan for you.`;
+                } else {
+                    el.textContent = 'Join Ugandans who are already growing their money with SHIMOGY. We have the right plan for you.';
+                }
+            } else {
+                el.textContent = 'Join Ugandans who are already growing their money with SHIMOGY. We have the right plan for you.';
+            }
+        }
+
+        function updatePlanCount() {
+            const el = document.getElementById('planCount');
+            if (el) el.textContent = investmentPlans.length;
+        }
+
+        function renderAllDynamic() {
+            renderFloatingCards();
+            renderShowcaseCards();
+            renderSlider();
+        }
+
+        function renderFloatingCards() {
+            const c = document.getElementById('heroFloatingCards');
+            if (!c) return;
+            if (investmentPlans.length === 0) {
+                c.innerHTML = '<div class="floating-card"><div class="floating-card-header"><h4>No plans available</h4></div></div>';
+                return;
+            }
+            const cards = investmentPlans.slice(0, 4).map(p => {
+                const pr = parseInt(p.Price) || 0;
+                const rv = parseInt(p.Return) || 0;
+                const roi = pr > 0 ? ((rv - pr) / pr * 100).toFixed(0) : 0;
+                return `<div class="floating-card">
+                            <div class="floating-card-header">
+                                <h4>${escapeHtml(p.Name || '')}</h4>
+                                <span class="return-badge">+${roi}% ROI</span>
+                            </div>
+                            <div style="font-size:0.8rem;color:rgba(255,255,255,0.5);">💰 Invest: UGX ${pr.toLocaleString()}</div>
+                            <div style="font-size:1.2rem;font-weight:700;color:#00e676;">📈 Return: UGX ${rv.toLocaleString()}</div>
+                            <div class="card-meta" style="display:flex;gap:1rem;font-size:0.7rem;color:rgba(255,255,255,0.4);margin-top:0.3rem;">
+                                <span><i class="fas fa-clock"></i> ${escapeHtml(p.Duration || '')}</span>
+                                <span><i class="fas fa-shield-alt"></i> ${escapeHtml(p.Risk || 'Low')} Risk</span>
+                            </div>
+                        </div>`;
+            }).join('');
+            c.innerHTML = cards;
+        }
+
+        function renderShowcaseCards() {
+            const c = document.getElementById('showcaseGrid');
+            if (!c) return;
+            let featured = investmentPlans.filter(p => p.Badge && ['hot','trending','new'].includes(p.Badge.toLowerCase()));
+            if (featured.length < 3) {
+                const remaining = investmentPlans.filter(p => !p.Badge || !['hot','trending','new'].includes(p.Badge.toLowerCase()));
+                featured = featured.concat(remaining.slice(0, 3 - featured.length));
+            }
+            const plans = featured.slice(0, 3);
+            if (plans.length === 0) {
+                c.innerHTML = '<div class="showcase-card" style="grid-column:1/-1;text-align:center;padding:2rem;"><p>No featured plans available.</p></div>';
+                return;
+            }
+            c.innerHTML = plans.map(p => {
+                const pr = parseInt(p.Price) || 0;
+                const rv = parseInt(p.Return) || 0;
+                const badge = (p.Badge || '').toLowerCase();
+                let badgeHtml = '<div class="showcase-card-badge" style="background:rgba(0,180,216,0.8);">POPULAR</div>';
+                if (badge === 'new') badgeHtml = '<div class="showcase-card-badge" style="background:rgba(0,230,118,0.9);color:#000;">NEW</div>';
+                else if (badge === 'hot') badgeHtml = '<div class="showcase-card-badge" style="background:rgba(255,82,82,0.9);color:#fff;">HOT 🔥</div>';
+                else if (badge === 'trending') badgeHtml = '<div class="showcase-card-badge" style="background:rgba(255,152,0,0.9);">TRENDING</div>';
+                const img = p.ImageURL || 'images/saloon.jpg';
+                return `<div class="showcase-card" onclick="location.href='investments.html'">
+                            <img src="${img}" alt="${escapeHtml(p.Name)}" class="showcase-card-img" onerror="this.src='images/saloon.jpg'">
+                            ${badgeHtml}
+                            <div class="showcase-card-overlay">
+                                <h3>${escapeHtml(p.Name || '')}</h3>
+                                <div class="invest-price">💰 Invest: UGX ${pr.toLocaleString()}</div>
+                                <div class="return-price">📈 Return: UGX ${rv.toLocaleString()}</div>
+                                <div class="meta-info">
+                                    <span>⏱️ ${escapeHtml(p.Duration || '')}</span>
+                                    <span>⚠️ ${escapeHtml(p.Risk || 'Low')} Risk</span>
+                                </div>
+                            </div>
+                        </div>`;
+            }).join('');
+        }
+
+        function renderSlider() {
+            const t = document.getElementById('sliderTrack');
+            if (!t) return;
+            if (investmentPlans.length === 0) {
+                t.innerHTML = '<div style="padding:1rem;color:rgba(255,255,255,0.3);">No plans available</div>';
+                return;
+            }
+            const slides = [...investmentPlans, ...investmentPlans];
+            t.innerHTML = slides.map(p => {
+                const pr = parseInt(p.Price) || 0;
+                const rv = parseInt(p.Return) || 0;
+                const roi = pr > 0 ? ((rv - pr) / pr * 100).toFixed(0) : 0;
+                const badge = (p.Badge || '').toLowerCase();
+                let badgeHtml = '';
+                if (badge === 'new') badgeHtml = '<span class="slider-badge badge-new">NEW</span>';
+                else if (badge === 'hot') badgeHtml = '<span class="slider-badge badge-hot">HOT</span>';
+                else if (badge === 'trending') badgeHtml = '<span class="slider-badge badge-trending">TRENDING</span>';
+                const img = p.ImageURL || 'images/saloon.jpg';
+                return `<div class="slider-card-modern" onclick="location.href='investments.html'">
+                            <div class="slider-img" style="background-image:url('${img}');">${badgeHtml}</div>
+                            <div class="slider-body">
+                                <h4>${escapeHtml(p.Name || '')}</h4>
+                                <div class="slider-invest">💰 Invest: UGX ${pr.toLocaleString()}</div>
+                                <div class="slider-return">📈 Return: UGX ${rv.toLocaleString()}</div>
+                                <div class="slider-roi">+${roi}% ROI • ${escapeHtml(p.Duration || '')}</div>
+                            </div>
+                        </div>`;
+            }).join('');
+        }
+
+        // ---------- Helpers ----------
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // ---------- Modal ----------
+        window.showAccessModal = function() {
+            document.getElementById('accessModal').classList.add('active');
+        };
+        window.closeAccessModal = function() {
+            document.getElementById('accessModal').classList.remove('active');
+        };
+
+        // ---------- Init ----------
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchPlans();
+            const modal = document.getElementById('accessModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) modal.classList.remove('active');
+                });
+            }
+        });
+    })();
+</script>
+</body>
+</html>

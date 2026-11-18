@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIMOGY | Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ========== YOUR EXISTING CSS (unchanged) ========== */
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#060d1a; font-family:'Inter',sans-serif; color:white; min-height:100vh; }
+        .notification-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(6,13,26,0.7); backdrop-filter:blur(15px); z-index:9999; display:none; }
+        .notification-overlay.show { display:block; }
+        .notification { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:linear-gradient(145deg,rgba(10,26,53,0.98),rgba(13,34,71,0.95)); border:1px solid rgba(0,180,216,0.3); border-radius:16px; padding:2rem 2.5rem; max-width:500px; width:90%; z-index:10000; display:none; box-shadow:0 30px 60px rgba(0,0,0,0.7); animation:popIn 0.35s ease; }
+        .notification.show { display:block; }
+        @keyframes popIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.9);} to{opacity:1;transform:translate(-50%,-50%) scale(1);} }
+        .notification h3 { color:#48cae4; font-size:1.1rem; margin-bottom:0.8rem; text-align:center; }
+        .notification p { color:rgba(255,255,255,0.75); font-size:0.85rem; line-height:1.6; margin-bottom:1rem; text-align:center; }
+        .notification .close-notif { position:absolute; top:12px; right:16px; background:rgba(255,82,82,0.15); border:1px solid rgba(255,82,82,0.2); color:#ff5252; width:32px; height:32px; border-radius:50%; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .notification .notif-actions { display:flex; gap:0.8rem; justify-content:center; }
+        .notification .btn-close-notif { background:rgba(0,180,216,0.15); color:#48cae4; border:1px solid rgba(0,180,216,0.25); padding:8px 20px; border-radius:20px; cursor:pointer; font-weight:600; font-size:0.78rem; }
+        .topbar { background:rgba(6,13,26,0.95); padding:0.7rem 1.5rem; border-bottom:1px solid rgba(0,180,216,0.15); display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:100; }
+        .topbar .logo h1 { font-family:'Bodoni Moda',serif; font-size:1.3rem; font-weight:900; background:linear-gradient(135deg,#fff,#48cae4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .topbar .logo span { font-size:0.5rem; letter-spacing:3px; color:#48cae4; display:block; }
+        .hamburger { display:none; background:none; border:none; color:white; font-size:1.5rem; cursor:pointer; padding:8px; }
+        .sidebar-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:199; }
+        .sidebar-overlay.show { display:block; }
+        .sidebar { width:270px; background:linear-gradient(180deg,#0d1a30,#0f2240); padding:1.5rem 0; height:100vh; overflow-y:auto; position:fixed; top:0; left:-270px; z-index:200; transition:left 0.3s ease; }
+        .sidebar.open { left:0; }
+        .sidebar .nav-title { padding:0.5rem 1.5rem; font-size:0.6rem; text-transform:uppercase; letter-spacing:3px; color:#48cae4; font-weight:700; margin-top:1rem; }
+        .sidebar .nav-title:first-child { margin-top:0; }
+        .sidebar a { display:flex; align-items:center; gap:10px; padding:12px 1.5rem; color:rgba(255,255,255,0.6); text-decoration:none; font-size:0.82rem; transition:0.2s; border-left:3px solid transparent; cursor:pointer; }
+        .sidebar a:hover { color:#fff; background:rgba(0,180,216,0.06); }
+        .sidebar a.active { color:#fff; background:rgba(0,180,216,0.1); border-left-color:#00e5ff; }
+        .main-content { padding:2rem; min-height:calc(100vh - 60px); }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+        .page-title { font-family:'Playfair Display',serif; font-size:1.8rem; margin-bottom:1.5rem; background:linear-gradient(135deg,#fff,#48cae4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; margin-bottom:2rem; }
+        .stat-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:1.2rem; text-align:center; }
+        .stat-card .num { font-size:1.8rem; font-weight:900; color:#ffd700; }
+        .stat-card .label { font-size:0.7rem; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-top:0.2rem; }
+        .panel { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:14px; padding:1.5rem; margin-bottom:1.5rem; }
+        .panel h3 { color:#48cae4; font-size:1rem; margin-bottom:1rem; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size:0.75rem; }
+        table th { text-align:left; padding:10px 12px; color:#48cae4; font-size:0.65rem; text-transform:uppercase; letter-spacing:1.5px; border-bottom:2px solid rgba(0,180,216,0.15); background:rgba(0,0,0,0.2); }
+        table td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.03); color:rgba(255,255,255,0.65); }
+        .form-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.8rem; }
+        .form-group { margin-bottom:0.8rem; }
+        .form-group label { display:block; font-size:0.7rem; color:#48cae4; margin-bottom:0.3rem; font-weight:600; text-transform:uppercase; }
+        .form-group input, .form-group select { width:100%; padding:10px 14px; border-radius:8px; border:1px solid rgba(0,180,216,0.15); background:rgba(255,255,255,0.03); color:white; outline:none; font-size:0.82rem; }
+        .form-group select option { background:#0a1a35; color:white; }
+        .badge { padding:4px 10px; border-radius:12px; font-size:0.62rem; font-weight:600; display:inline-block; }
+        .badge-success { background:rgba(0,230,118,0.15); color:#00e676; }
+        .badge-warning { background:rgba(255,152,0,0.15); color:#ffb800; }
+        .badge-info { background:rgba(0,180,216,0.15); color:#48cae4; }
+        .badge-danger { background:rgba(255,82,82,0.15); color:#ff5252; }
+        .btn { padding:8px 16px; border-radius:8px; font-size:0.72rem; border:none; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:5px; }
+        .btn-info { background:rgba(0,180,216,0.2); color:#48cae4; }
+        .btn-danger { background:rgba(255,82,82,0.2); color:#ff5252; }
+        .btn-add { background:linear-gradient(135deg,#00e5ff,#0077b6); color:#000; padding:10px 22px; border-radius:8px; font-weight:700; font-size:0.8rem; border:none; cursor:pointer; margin-top:0.8rem; }
+        .login-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop') center/cover; position:relative; }
+        .login-screen::before { content:''; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(6,13,26,0.9); }
+        .login-box { position:relative; background:rgba(10,26,53,0.9); border:1px solid rgba(0,180,216,0.2); border-radius:20px; padding:3rem; width:100%; max-width:400px; text-align:center; }
+        .login-box input { width:100%; padding:12px 16px; margin:8px 0; border-radius:8px; border:1px solid rgba(0,180,216,0.2); background:rgba(255,255,255,0.04); color:white; outline:none; font-size:0.9rem; }
+        .btn-login { width:100%; padding:12px; border:none; border-radius:8px; background:linear-gradient(135deg,#00b4d8,#0077b6); color:white; font-weight:700; cursor:pointer; margin-top:1rem; font-size:0.95rem; }
+        .member-table { width:100%; border-collapse:collapse; font-size:0.78rem; }
+        .member-table th, .member-table td { padding:10px 8px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .member-table tr { cursor:pointer; transition:background 0.2s; }
+        .member-table tr:hover { background:rgba(0,180,216,0.08); }
+        .member-table tr.selected { background:rgba(0,180,216,0.15); border-left:3px solid #00e5ff; }
+        .password-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(6,13,26,0.95); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; z-index:1000; visibility:hidden; opacity:0; transition:0.2s; }
+        .password-modal.active { visibility:visible; opacity:1; }
+        .password-box { background:linear-gradient(145deg,#0a1a35,#0d2247); padding:2rem; border-radius:24px; border:1px solid rgba(0,180,216,0.3); width:90%; max-width:360px; text-align:center; }
+        .password-box input { width:100%; padding:12px; margin:1rem 0; border-radius:40px; border:1px solid rgba(0,180,216,0.3); background:rgba(255,255,255,0.05); color:white; }
+        .toast { position:fixed; bottom:20px; right:20px; background:#0f2240; border-left:4px solid #48cae4; padding:12px 20px; border-radius:8px; z-index:1100; display:none; animation:fadeIn 0.3s; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+        @media(min-width:901px){ .hamburger{display:none!important;} .sidebar-overlay{display:none!important;} .sidebar{position:sticky!important;top:0!important;left:0!important;height:100vh!important;z-index:10!important;transition:none!important;} .app-layout{display:flex;} .main-content{flex:1;} }
+        @media(max-width:900px){ .hamburger{display:block;} .sidebar{left:-270px;position:fixed;z-index:200;} .sidebar.open{left:0;} .app-layout{display:block;} .stats-grid{grid-template-columns:repeat(2,1fr);} .form-row{grid-template-columns:1fr;} }
+    </style>
+</head>
+<body>
+
+<div class="notification-overlay" id="notifOverlay"></div>
+<div class="notification" id="notification">
+    <button class="close-notif" id="closeNotifBtn">✕</button>
+    <h3 id="notifTitle"></h3>
+    <p id="notifBody"></p>
+    <div class="notif-actions"><button class="btn-close-notif" id="closeNotifBtn2">Close</button></div>
+</div>
+
+<div id="loginScreen" class="login-screen">
+    <div class="login-box">
+        <div style="font-size:3rem;margin-bottom:1rem;">🛡️</div>
+        <h2>Administrator</h2>
+        <p style="color:rgba(255,255,255,0.4);margin-bottom:1.5rem;">Sign in with your admin account</p>
+        <input type="email" id="adminEmail" placeholder="Email" value="maleham06@gmail.com">
+        <input type="password" id="adminPass" placeholder="Password">
+        <button class="btn-login" id="loginBtn">Access Dashboard</button>
+    </div>
+</div>
+
+<div id="dashboardScreen" style="display:none;">
+    <div class="topbar">
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <button class="hamburger" id="hamburgerBtn">☰</button>
+            <div class="logo"><h1>SHIMOGY</h1><span>ADMIN PANEL</span></div>
+        </div>
+        <div style="display:flex;gap:0.8rem;align-items:center;">
+            <a href="index.html" style="color:rgba(255,255,255,0.5);text-decoration:none;font-size:0.8rem;">🏠 Site</a>
+            <button class="btn btn-danger" id="logoutBtn">🚪 Logout</button>
+        </div>
+    </div>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <div class="app-layout">
+        <div class="sidebar" id="sidebar">
+            <div class="nav-title">📊 Main</div>
+            <a class="active" data-tab="overview"><i class="fas fa-chart-pie"></i> Overview</a>
+            <a data-tab="members"><i class="fas fa-users"></i> Members</a>
+            <a data-tab="viewMember"><i class="fas fa-search"></i> View Member</a>
+            <a data-tab="createMember"><i class="fas fa-user-plus"></i> Create Member</a>
+            <a data-tab="updateMember"><i class="fas fa-edit"></i> Update Member</a>
+            <div class="nav-title">💰 Records</div>
+            <a data-tab="addInvestment"><i class="fas fa-chart-line"></i> Add Investment</a>
+            <a data-tab="addSavings"><i class="fas fa-piggy-bank"></i> Add Savings</a>
+            <a data-tab="addLoan"><i class="fas fa-hand-holding-usd"></i> Add Loan</a>
+            <a data-tab="addCycle"><i class="fas fa-sync-alt"></i> Add Cycle</a>
+            <div class="nav-title">🏗️ Manage</div>
+            <a data-tab="managePlans"><i class="fas fa-cogs"></i> Investment Plans</a>
+            <a data-tab="manageUpdates"><i class="fas fa-newspaper"></i> News Updates</a>
+            <div class="nav-title">📋 View</div>
+            <a data-tab="investments"><i class="fas fa-list"></i> All Investments</a>
+            <a data-tab="savings"><i class="fas fa-list"></i> All Savings</a>
+            <a data-tab="loans"><i class="fas fa-list"></i> All Loans</a>
+            <a data-tab="cycles"><i class="fas fa-list"></i> All Cycles</a>
+            <div class="nav-title">⚙️ Settings</div>
+            <a data-tab="slots"><i class="fas fa-ticket-alt"></i> Slots</a>
+            <a data-tab="changePassword"><i class="fas fa-key"></i> Password</a>
+        </div>
+        <div class="main-content">
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="tab-overview"><h2 class="page-title">Dashboard Overview</h2><div class="stats-grid" id="overviewStats"></div></div>
+            <!-- Members Tab -->
+            <div class="tab-content" id="tab-members"><h2 class="page-title">All Members</h2><div class="table-wrap" id="membersTable"></div></div>
+            <!-- View Member Tab -->
+            <div class="tab-content" id="tab-viewMember"><h2 class="page-title">View Member</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Phone Number</label><input type="tel" id="viewPhone"></div></div><button class="btn-add" id="viewMemberBtn">🔍 Search</button><div id="viewMemberResult" style="margin-top:1.5rem;"></div></div></div>
+            <!-- Create Member Tab (unchanged) -->
+            <div class="tab-content" id="tab-createMember"><h2 class="page-title">Create Member (Full Details)</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Name *</label><input type="text" id="newName"></div><div class="form-group"><label>Phone *</label><input type="tel" id="newPhone"></div><div class="form-group"><label>Password *</label><input type="text" id="newPassword"></div><div class="form-group"><label>Email</label><input type="email" id="newEmail"></div><div class="form-group"><label>Group</label><input type="text" id="newGroup"></div><div class="form-group"><label>Balance (UGX)</label><input type="number" id="newBalance" value="0"></div><div class="form-group"><label>Total Invested</label><input type="number" id="newTotalInvested" value="0"></div><div class="form-group"><label>Status</label><select id="newStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div></div><h3>💰 Investment (optional)</h3><div class="form-row"><div class="form-group"><label>Plan Name</label><select id="newInvPlan"><option value="">None</option></select></div><div class="form-group"><label>Amount (UGX)</label><input type="number" id="newInvAmount"></div><div class="form-group"><label>Expected Return</label><input type="number" id="newInvReturn"></div><div class="form-group"><label>Duration</label><input type="text" id="newInvDuration" placeholder="30 Days"></div></div><h3>💰 Savings (optional)</h3><div class="form-row"><div class="form-group"><label>Account Type</label><select id="newSavType"><option value="">None</option><option>Current Account</option><option>Fixed Deposit</option></select></div><div class="form-group"><label>Balance (UGX)</label><input type="number" id="newSavBalance"></div></div><h3>💳 Loan (optional)</h3><div class="form-row"><div class="form-group"><label>Loan Amount</label><input type="number" id="newLoanAmount"></div><div class="form-group"><label>Purpose</label><input type="text" id="newLoanPurpose"></div><div class="form-group"><label>Duration</label><input type="text" id="newLoanDuration" value="3 months"></div><div class="form-group"><label>Interest Rate (%)</label><input type="text" id="newLoanInterest" value="10%"></div></div><h3>🔄 Cycle (optional)</h3><div class="form-row"><div class="form-group"><label>Cycle Name</label><input type="text" id="newCycleName"></div><div class="form-group"><label>Contribution</label><input type="number" id="newCycleContribution"></div></div><button class="btn-add" id="createMemberFullBtn">➕ Create Member with all details</button></div></div>
+            <!-- Update Member Tab (unchanged) -->
+            <div class="tab-content" id="tab-updateMember">
+                <h2 class="page-title">Update Member (Select from table)</h2>
+                <div class="panel">
+                    <div class="table-wrap">
+                        <table class="member-table" id="memberManagerTable">
+                            <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th>Group</th><th>Balance</th><th>Invested</th><th>Status</th></tr></thead>
+                            <tbody id="memberManagerBody"><tr><td colspan="8" style="text-align:center;">Loading members...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="editMemberPanel" class="panel" style="display:none;">
+                    <h3><i class="fas fa-edit"></i> Edit Member Details</h3>
+                    <form id="editMemberForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>Full Name</label><input type="text" id="editName" required></div>
+                            <div class="form-group"><label>Phone</label><input type="tel" id="editPhone" required></div>
+                            <div class="form-group"><label>Email</label><input type="email" id="editEmail"></div>
+                            <div class="form-group"><label>Group</label><input type="text" id="editGroup"></div>
+                            <div class="form-group"><label>Balance (UGX)</label><input type="number" id="editBalance" step="1000"></div>
+                            <div class="form-group"><label>Total Invested (UGX)</label><input type="number" id="editInvested" step="1000"></div>
+                            <div class="form-group"><label>Status</label><select id="editStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                            <div class="form-group"><label>New Password (optional)</label><input type="text" id="editPassword" placeholder="Leave blank to keep current"></div>
+                        </div>
+                        <div class="action-buttons" style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1rem;">
+                            <button type="button" class="btn btn-danger" id="cancelEditBtn">Cancel</button>
+                            <button type="submit" class="btn-add">💾 Save Changes</button>
+                        </div>
+                        <div id="editError" style="color:#ff5252; font-size:0.75rem; margin-top:0.5rem; display:none;"></div>
+                        <div id="editSuccess" style="color:#00e676; font-size:0.75rem; margin-top:0.5rem; display:none;"></div>
+                    </form>
+                </div>
+            </div>
+            <!-- Add Investment Tab (unchanged) -->
+            <div class="tab-content" id="tab-addInvestment"><h2 class="page-title">Add Investment</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Phone *</label><input type="tel" id="invPhone"></div><div class="form-group"><label>Name</label><input type="text" id="invName"></div><div class="form-group"><label>Plan *</label><select id="invPlan"><option value="">Select</option></select></div><div class="form-group"><label>Amount *</label><input type="number" id="invAmount"></div><div class="form-group"><label>Return</label><input type="number" id="invReturn"></div><div class="form-group"><label>Duration</label><input type="text" id="invDuration" value="30 Days"></div></div><button class="btn-add" id="addInvestmentBtn">➕ Add</button></div></div>
+            <!-- Add Savings Tab (unchanged) -->
+            <div class="tab-content" id="tab-addSavings"><h2 class="page-title">Add Savings</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Phone *</label><input type="tel" id="savPhone"></div><div class="form-group"><label>Name</label><input type="text" id="savName"></div><div class="form-group"><label>Type *</label><select id="savType"><option value="">Select</option><option>Current Account</option><option>Fixed Deposit</option></select></div><div class="form-group"><label>Balance</label><input type="number" id="savBalance" value="0"></div></div><button class="btn-add" id="addSavingsBtn">➕ Add</button></div></div>
+            <!-- Add Loan Tab (unchanged) -->
+            <div class="tab-content" id="tab-addLoan"><h2 class="page-title">Add Loan</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Phone *</label><input type="tel" id="loanPhone"></div><div class="form-group"><label>Name</label><input type="text" id="loanName"></div><div class="form-group"><label>Amount *</label><input type="number" id="loanAmount"></div><div class="form-group"><label>Purpose</label><input type="text" id="loanPurpose"></div></div><button class="btn-add" id="addLoanBtn">➕ Add</button></div></div>
+            <!-- Add Cycle Tab (unchanged) -->
+            <div class="tab-content" id="tab-addCycle"><h2 class="page-title">Add Cycle</h2><div class="panel"><div class="form-row"><div class="form-group"><label>Phone</label><input type="tel" id="cyclePhone"></div><div class="form-group"><label>Name</label><input type="text" id="cycleMemberName"></div><div class="form-group"><label>Cycle *</label><input type="text" id="cycleGroup"></div><div class="form-group"><label>Amount</label><input type="number" id="cycleAmount" value="0"></div></div><button class="btn-add" id="addCycleBtn">➕ Add</button></div></div>
+            <!-- Manage Plans Tab - Investment Plans Tabulated -->
+            <div class="tab-content" id="tab-managePlans">
+                <h2 class="page-title">Investment Plans</h2>
+                <div class="table-wrap" id="plansTable"></div>
+                <div class="panel" style="margin-top:1.5rem;"><h3>➕ Add Plan</h3>
+                    <div class="form-row">
+                        <div class="form-group"><label>Name *</label><input type="text" id="planName"></div>
+                        <div class="form-group"><label>Price *</label><input type="number" id="planPrice"></div>
+                        <div class="form-group"><label>Return</label><input type="number" id="planReturn"></div>
+                        <div class="form-group"><label>Duration</label><input type="text" id="planDuration" value="30 DAYS"></div>
+                        <div class="form-group"><label>Risk</label><select id="planRisk"><option>Low</option><option>Medium</option><option>High</option></select></div>
+                        <div class="form-group"><label>Image</label><input type="text" id="planImage"><input type="file" id="planImageFile" style="display:none"><button type="button" class="btn btn-info" id="planImageUploadBtn">📷</button></div>
+                        <div class="form-group"><label>Slots</label><input type="number" id="planSlots" value="5"></div>
+                        <div class="form-group"><label>Badge</label><select id="planBadge"><option value="">None</option><option value="new">NEW</option><option value="hot">HOT</option><option value="trending">TRENDING</option></select></div>
+                    </div>
+                    <button class="btn-add" id="addPlanBtn">➕ Add</button>
+                </div>
+            </div>
+            <!-- Manage Updates Tab (unchanged) -->
+            <div class="tab-content" id="tab-manageUpdates"><h2 class="page-title">News Updates</h2><div class="table-wrap" id="updatesTable"></div><div class="panel" style="margin-top:1.5rem;"><h3>➕ Publish New Update</h3><div class="form-row"><div class="form-group"><label>Title *</label><input type="text" id="updTitle"></div><div class="form-group"><label>Category</label><select id="updCategory"><option value="news">News</option><option value="story">Story</option><option value="tip">Tip</option><option value="event">Event</option></select></div><div class="form-group"><label>Image URL</label><input type="text" id="updImage"><input type="file" id="updImageFile" style="display:none"><button type="button" class="btn btn-info" id="updImageUploadBtn">📷 Upload</button></div></div><div class="form-group"><label>Excerpt *</label><input type="text" id="updExcerpt"></div><div class="form-group"><label>Full Detail *</label><input type="text" id="updDetail"></div><button class="btn-add" id="publishUpdateBtn">📰 Publish</button></div></div>
+            <!-- All Investments Tab (unchanged) -->
+            <div class="tab-content" id="tab-investments"><h2 class="page-title">All Investments</h2><div class="table-wrap" id="investmentsTable"></div></div>
+            <!-- All Savings Tab (unchanged) -->
+            <div class="tab-content" id="tab-savings"><h2 class="page-title">All Savings</h2><div class="table-wrap" id="savingsTable"></div></div>
+            <!-- All Loans Tab (unchanged) -->
+            <div class="tab-content" id="tab-loans"><h2 class="page-title">All Loans</h2><div class="table-wrap" id="loansTable"></div></div>
+            <!-- All Cycles Tab (unchanged) -->
+            <div class="tab-content" id="tab-cycles"><h2 class="page-title">All Cycles</h2><div class="table-wrap" id="cyclesTable"></div></div>
+            <!-- Slots Tab (unchanged) -->
+            <div class="tab-content" id="tab-slots"><h2 class="page-title">Slots</h2><div class="panel"><div id="slotsList"></div><div class="form-row"><div class="form-group"><label>Plan</label><select id="slotPlan"><option value="">Select</option></select></div><div class="form-group"><label>Slots</label><input type="number" id="slotCount"></div></div><button class="btn-add" id="updateSlotsBtn">💾 Update</button></div></div>
+            <!-- Change Password Tab (unchanged) -->
+            <div class="tab-content" id="tab-changePassword"><h2 class="page-title">Change Password</h2><div class="panel" style="max-width:400px;"><div class="form-group"><label>New Password</label><input type="password" id="newPass"></div><div class="form-group"><label>Confirm</label><input type="password" id="confirmPass"></div><button class="btn-add" id="changePasswordBtn">🔑 Update</button></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Password Modal (for member edit) -->
+<div id="passwordModal" class="password-modal">
+    <div class="password-box">
+        <i class="fas fa-lock" style="font-size:2rem; color:#48cae4;"></i>
+        <h3>Admin Authorization</h3>
+        <p style="font-size:0.8rem; margin-bottom:1rem;">Enter admin password to edit this member.</p>
+        <input type="password" id="adminPasswordInput" placeholder="Admin Password">
+        <button id="verifyPasswordBtn" class="btn-add">Verify & Edit</button>
+        <div id="passwordError" style="color:#ff5252; font-size:0.75rem; margin-top:0.5rem; display:none;"></div>
+        <button id="closeModalBtn" style="background:transparent; border:none; color:#aaa; margin-top:1rem; cursor:pointer;">Cancel</button>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    (function() {
+        // ========== SUPABASE CONFIGURATION ==========
+        const SUPABASE_URL = 'https://kmayxgyjkgccpnarpfnw.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_HqsxgO9VoKr60ahCjw-0Aw_WmCcKuFA';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const ADMIN_PASSWORD = 'admin123';  // admin password for member editing
+
+        let allMembers = [];
+        let selectedMember = null;
+        let allData = { members:[], investments:[], savings:[], loans:[], cycles:[], investmentPlans:[], updates:[] };
+
+        // ---------- Helper Functions ----------
+        function showNotification(title, body) {
+            document.getElementById('notifTitle').textContent = title;
+            document.getElementById('notifBody').textContent = body;
+            document.getElementById('notification').classList.add('show');
+            document.getElementById('notifOverlay').classList.add('show');
+        }
+        function closeNotification() {
+            document.getElementById('notification').classList.remove('show');
+            document.getElementById('notifOverlay').classList.remove('show');
+        }
+        document.getElementById('closeNotifBtn').addEventListener('click', closeNotification);
+        document.getElementById('closeNotifBtn2').addEventListener('click', closeNotification);
+        document.getElementById('notifOverlay').addEventListener('click', closeNotification);
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.backgroundColor = isError ? '#4a0e1c' : '#0f2240';
+            toast.style.borderLeftColor = isError ? '#ff5252' : '#48cae4';
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // ---------- Login / Logout ----------
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPass').value.trim();
+            if (!email || !password) return showNotification('Error', 'Enter email and password.');
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) return showNotification('Login Failed', error.message);
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboardScreen').style.display = 'block';
+            loadAllData();
+            loadMemberManagerTable();
+        });
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('dashboardScreen').style.display = 'none';
+        });
+
+        // ---------- Sidebar ----------
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        document.getElementById('hamburgerBtn').addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('show'); });
+        overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('show'); });
+        document.querySelectorAll('.sidebar a').forEach(link => {
+            link.addEventListener('click', function() {
+                const tab = this.getAttribute('data-tab');
+                if (tab) switchTab(tab);
+                if (window.innerWidth <= 900) { sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+            });
+        });
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            const el = document.getElementById('tab-' + tab);
+            if (el) el.classList.add('active');
+            document.querySelectorAll('.sidebar a').forEach(a => { if (a.getAttribute('data-tab') === tab) a.classList.add('active'); });
+            if (tab === 'updateMember') loadMemberManagerTable();
+        }
+
+        // ---------- Load All Data (for all tables) ----------
+        async function loadAllData() {
+            const tables = ['members','investments','savings','loans','cycles','investment_plans','updates'];
+            for (const t of tables) {
+                try {
+                    const { data, error } = await supabase.from(t).select('*');
+                    if (error) { console.error(`Error loading ${t}:`, error); allData[t === 'investment_plans' ? 'investmentPlans' : t] = []; }
+                    else { allData[t === 'investment_plans' ? 'investmentPlans' : t] = data || []; }
+                } catch(err) { console.error(err); allData[t] = []; }
+            }
+            renderAll();
+            populateDropdowns();
+        }
+
+        function renderAll() {
+            document.getElementById('overviewStats').innerHTML = `
+                <div class="stat-card"><div class="num">${allData.members.length}</div><div class="label">Members</div></div>
+                <div class="stat-card"><div class="num">${allData.investments.length}</div><div class="label">Investments</div></div>
+                <div class="stat-card"><div class="num">${allData.savings.length}</div><div class="label">Savings</div></div>
+                <div class="stat-card"><div class="num">${allData.loans.length}</div><div class="label">Loans</div></div>
+                <div class="stat-card"><div class="num">${allData.cycles.length}</div><div class="label">Cycles</div></div>
+                <div class="stat-card"><div class="num">${allData.investmentPlans.length}</div><div class="label">Plans</div></div>
+                <div class="stat-card"><div class="num">${allData.updates.length}</div><div class="label">Updates</div></div>`;
+            renderTable('membersTable', allData.members, ['name','phone','email','group_name','balance','total_invested','status']);
+            renderTable('investmentsTable', allData.investments, ['member_name','member_phone','plan_name','amount','expected_return','duration','status']);
+            renderTable('savingsTable', allData.savings, ['member_name','member_phone','account_type','balance','open_date','status']);
+            renderTable('loansTable', allData.loans, ['member_name','member_phone','amount','purpose','duration','request_date','status']);
+            renderTable('cyclesTable', allData.cycles, ['member_name','member_phone','cycle_name','contribution','join_date','status']);
+            renderPlansTable();      // TABULATED INVESTMENT PLANS
+            renderUpdatesTable();
+            renderSlots();
+        }
+
+        function renderTable(id, data, cols) {
+            const c = document.getElementById(id);
+            if (!data.length) { c.innerHTML = '<p style="color:rgba(255,255,255,0.3);text-align:center;padding:2rem;">No records</p>'; return; }
+            let html = '<div class="table-wrap"><table><thead><tr>';
+            cols.forEach(col => html += `<th>${col.replace(/_/g,' ').toUpperCase()}</th>`);
+            html += '</thead><tbody>';
+            data.forEach(row => {
+                html += '<tr>';
+                cols.forEach(col => {
+                    let v = row[col] !== undefined && row[col] !== null ? row[col] : '-';
+                    if (['amount','expected_return','balance','total_invested','contribution','price','return'].includes(col)) v = 'UGX ' + Number(v).toLocaleString();
+                    if (col === 'status') {
+                        let cls = 'badge-info';
+                        if (['active','approved','completed','available','published'].includes(v)) cls = 'badge-success';
+                        else if (['pending','filling'].includes(v)) cls = 'badge-warning';
+                        v = `<span class="badge ${cls}">${v}</span>`;
+                    }
+                    html += `<td>${v}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            c.innerHTML = html;
+        }
+
+        // ----- TABULATED INVESTMENT PLANS -----
+        function renderPlansTable() {
+            const data = allData.investmentPlans;
+            const container = document.getElementById('plansTable');
+            if (!data.length) { container.innerHTML = '<p style="color:rgba(255,255,255,0.3);text-align:center;padding:2rem;">No plans</p>'; return; }
+            let html = '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Price</th><th>Return</th><th>Duration</th><th>Risk</th><th>Slots</th><th>Badge</th><th>Action</th></thead><tbody>';
+            data.forEach(p => {
+                html += `<tr>
+                             <td>${escapeHtml(p.name)}</td>
+                             <td>UGX ${Number(p.price).toLocaleString()}</td>
+                             <td>UGX ${Number(p.expected_return).toLocaleString()}</td>
+                             <td>${escapeHtml(p.duration)}</td>
+                             <td>${escapeHtml(p.risk)}</td>
+                             <td>${p.slots_left}</td>
+                             <td>${escapeHtml(p.badge) || '-'}</td>
+                             <td><button class="btn btn-danger del-plan" data-id="${p.id}">🗑️</button></td>
+                           </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            document.querySelectorAll('.del-plan').forEach(btn => btn.addEventListener('click', () => deleteRecord('investment_plans', btn.dataset.id)));
+        }
+
+        function renderUpdatesTable() {
+            const data = allData.updates;
+            const container = document.getElementById('updatesTable');
+            if (!data.length) { container.innerHTML = '<p style="color:rgba(255,255,255,0.3);text-align:center;padding:2rem;">No updates</p>'; return; }
+            let html = '<div class="table-wrap"><table><thead><tr><th>Title</th><th>Category</th><th>Date</th><th>Action</th></thead><tbody>';
+            data.forEach(u => {
+                html += `<tr>
+                             <td>${escapeHtml(u.title)}</td>
+                             <td><span class="badge badge-info">${escapeHtml(u.category) || 'news'}</span></td>
+                             <td>${u.published_date ? new Date(u.published_date).toLocaleDateString() : '-'}</td>
+                             <td><button class="btn btn-danger del-upd" data-id="${u.id}">🗑️</button></td>
+                           </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            document.querySelectorAll('.del-upd').forEach(btn => btn.addEventListener('click', () => deleteRecord('updates', btn.dataset.id)));
+        }
+
+        function renderSlots() {
+            const container = document.getElementById('slotsList');
+            if (!allData.investmentPlans.length) { container.innerHTML = '<p>No plans</p>'; return; }
+            container.innerHTML = allData.investmentPlans.map(p => `<div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span>${p.name}</span><span style="color:#ffd700;font-weight:700">${p.slots_left} slots</span></div>`).join('');
+        }
+
+        function populateDropdowns() {
+            const opts = allData.investmentPlans.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+            document.getElementById('invPlan').innerHTML = '<option value="">Select</option>' + opts;
+            document.getElementById('slotPlan').innerHTML = '<option value="">Select</option>' + opts;
+            document.getElementById('newInvPlan').innerHTML = '<option value="">None</option>' + opts;
+        }
+
+        async function deleteRecord(table, id) {
+            if (!confirm('Delete this record?')) return;
+            const { error } = await supabase.from(table).delete().eq('id', id);
+            if (error) showNotification('Error', error.message);
+            else loadAllData();
+        }
+
+        // ---------- View Member (unchanged) ----------
+        document.getElementById('viewMemberBtn').addEventListener('click', async function() {
+            const phone = document.getElementById('viewPhone').value.trim();
+            if (!phone) return showNotification('Error','Enter phone number');
+            const { data: m } = await supabase.from('members').select('*').eq('phone', phone).single();
+            if (!m) { document.getElementById('viewMemberResult').innerHTML = '<p style="color:#ff5252">Not found</p>'; return; }
+            const [inv, sav, loa, cyc] = await Promise.all([
+                supabase.from('investments').select('*').eq('member_phone', phone),
+                supabase.from('savings').select('*').eq('member_phone', phone),
+                supabase.from('loans').select('*').eq('member_phone', phone),
+                supabase.from('cycles').select('*').eq('member_phone', phone)
+            ]);
+            let html = `<div class="panel"><h3>👤 ${m.name}</h3><p>📞 ${m.phone} | ${m.email||''}</p><p>Balance: UGX ${Number(m.balance).toLocaleString()} | Invested: UGX ${Number(m.total_invested).toLocaleString()}</p></div>`;
+            if (inv.data.length) {
+                html += '<div class="panel"><h4>📈 Investments</h4><table><thead><tr><th>Plan</th><th>Amount</th><th>Return</th><th>Duration</th></tr></thead><tbody>';
+                inv.data.forEach(i => html += `<tr><td>${i.plan_name}</td><td>UGX ${Number(i.amount).toLocaleString()}</td><td>UGX ${Number(i.expected_return).toLocaleString()}</td><td>${i.duration}</td></tr>`);
+                html += '</tbody></table></div>';
+            }
+            if (sav.data.length) {
+                html += '<div class="panel"><h4>💰 Savings</h4><table><thead><tr><th>Type</th><th>Balance</th></tr></thead><tbody>';
+                sav.data.forEach(s => html += `<tr><td>${s.account_type}</td><td>UGX ${Number(s.balance).toLocaleString()}</td></tr>`);
+                html += '</tbody></table></div>';
+            }
+            if (loa.data.length) {
+                html += '<div class="panel"><h4>💳 Loans</h4><table><thead><tr><th>Amount</th><th>Purpose</th><th>Status</th></tr></thead><tbody>';
+                loa.data.forEach(l => html += `<tr><td>UGX ${Number(l.amount).toLocaleString()}</td><td>${l.purpose||''}</td><td>${l.status}</td></tr>`);
+                html += '</tbody></table></div>';
+            }
+            if (cyc.data.length) {
+                html += '<div class="panel"><h4>🔄 Cycles</h4><table><thead><tr><th>Cycle</th><th>Contribution</th></tr></thead><tbody>';
+                cyc.data.forEach(c => html += `<tr><td>${c.cycle_name}</td><td>UGX ${Number(c.contribution).toLocaleString()}</td></tr>`);
+                html += '</tbody></table></div>';
+            }
+            document.getElementById('viewMemberResult').innerHTML = html;
+        });
+
+        // ---------- Create Member (full) ----------
+        document.getElementById('createMemberFullBtn').addEventListener('click', async () => {
+            const name = document.getElementById('newName').value.trim();
+            const phone = document.getElementById('newPhone').value.trim();
+            const password = document.getElementById('newPassword').value.trim();
+            if (!name || !phone || !password) return showNotification('Error', 'Name, Phone, Password required');
+            const { data: memberData, error: memberError } = await supabase.from('members').insert([{
+                name, phone, password_hash: password, email: document.getElementById('newEmail').value,
+                group_name: document.getElementById('newGroup').value, balance: Number(document.getElementById('newBalance').value) || 0,
+                total_invested: Number(document.getElementById('newTotalInvested').value) || 0,
+                status: document.getElementById('newStatus').value, role: 'client'
+            }]).select();
+            if (memberError) return showNotification('Error', memberError.message);
+            if (document.getElementById('newInvPlan').value && document.getElementById('newInvAmount').value) {
+                await supabase.from('investments').insert([{ member_phone: phone, member_name: name, plan_name: document.getElementById('newInvPlan').value, amount: Number(document.getElementById('newInvAmount').value), expected_return: Number(document.getElementById('newInvReturn').value || document.getElementById('newInvAmount').value), duration: document.getElementById('newInvDuration').value || '30 Days', status: 'active' }]);
+            }
+            if (document.getElementById('newSavType').value && document.getElementById('newSavBalance').value) {
+                await supabase.from('savings').insert([{ member_phone: phone, member_name: name, account_type: document.getElementById('newSavType').value, balance: Number(document.getElementById('newSavBalance').value), status: 'active' }]);
+            }
+            if (document.getElementById('newLoanAmount').value) {
+                await supabase.from('loans').insert([{ member_phone: phone, member_name: name, amount: Number(document.getElementById('newLoanAmount').value), purpose: document.getElementById('newLoanPurpose').value, duration: document.getElementById('newLoanDuration').value, interest_rate: document.getElementById('newLoanInterest').value, status: 'pending' }]);
+            }
+            if (document.getElementById('newCycleName').value && document.getElementById('newCycleContribution').value) {
+                await supabase.from('cycles').insert([{ member_phone: phone, member_name: name, cycle_name: document.getElementById('newCycleName').value, contribution: Number(document.getElementById('newCycleContribution').value), status: 'active' }]);
+            }
+            showNotification('Success', `Member ${name} created`);
+            loadAllData();
+            loadMemberManagerTable();
+            // Clear create member form
+            document.getElementById('newName').value = '';
+            document.getElementById('newPhone').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newGroup').value = '';
+            document.getElementById('newBalance').value = '0';
+            document.getElementById('newTotalInvested').value = '0';
+            document.getElementById('newInvAmount').value = '';
+            document.getElementById('newInvReturn').value = '';
+            document.getElementById('newSavBalance').value = '';
+            document.getElementById('newLoanAmount').value = '';
+            document.getElementById('newLoanPurpose').value = '';
+            document.getElementById('newCycleName').value = '';
+            document.getElementById('newCycleContribution').value = '';
+        });
+
+        // ---------- Add Investment (clear) ----------
+        document.getElementById('addInvestmentBtn').addEventListener('click', async () => {
+            const ph = document.getElementById('invPhone').value.trim();
+            const pl = document.getElementById('invPlan').value;
+            const am = document.getElementById('invAmount').value;
+            if (!ph||!pl||!am) return showNotification('Error','Fill fields');
+            await supabase.from('investments').insert([{ member_phone:ph, member_name:document.getElementById('invName').value, plan_name:pl, amount:Number(am), expected_return:Number(document.getElementById('invReturn').value||am), duration:document.getElementById('invDuration').value, status:'active' }]);
+            showNotification('Success','Investment added'); loadAllData();
+            document.getElementById('invPhone').value = '';
+            document.getElementById('invName').value = '';
+            document.getElementById('invAmount').value = '';
+            document.getElementById('invReturn').value = '';
+            document.getElementById('invDuration').value = '30 Days';
+        });
+        // ---------- Add Savings (clear) ----------
+        document.getElementById('addSavingsBtn').addEventListener('click', async () => {
+            const ph = document.getElementById('savPhone').value.trim();
+            const ty = document.getElementById('savType').value;
+            if (!ph||!ty) return showNotification('Error','Fill fields');
+            await supabase.from('savings').insert([{ member_phone:ph, member_name:document.getElementById('savName').value, account_type:ty, balance:Number(document.getElementById('savBalance').value)||0, status:'active' }]);
+            showNotification('Success','Savings added'); loadAllData();
+            document.getElementById('savPhone').value = '';
+            document.getElementById('savName').value = '';
+            document.getElementById('savBalance').value = '0';
+        });
+        // ---------- Add Loan (clear) ----------
+        document.getElementById('addLoanBtn').addEventListener('click', async () => {
+            const ph = document.getElementById('loanPhone').value.trim();
+            const am = document.getElementById('loanAmount').value;
+            if (!ph||!am) return showNotification('Error','Fill fields');
+            await supabase.from('loans').insert([{ member_phone:ph, member_name:document.getElementById('loanName').value, amount:Number(am), purpose:document.getElementById('loanPurpose').value, duration:'3 months', interest_rate:'10%', status:'pending' }]);
+            showNotification('Success','Loan added'); loadAllData();
+            document.getElementById('loanPhone').value = '';
+            document.getElementById('loanName').value = '';
+            document.getElementById('loanAmount').value = '';
+            document.getElementById('loanPurpose').value = '';
+        });
+        // ---------- Add Cycle (clear) ----------
+        document.getElementById('addCycleBtn').addEventListener('click', async () => {
+            const gr = document.getElementById('cycleGroup').value.trim();
+            if (!gr) return showNotification('Error','Cycle name required');
+            await supabase.from('cycles').insert([{ name:gr, contribution:Number(document.getElementById('cycleAmount').value)||0, max_members:10, status:'active' }]);
+            showNotification('Success','Cycle added'); loadAllData();
+            document.getElementById('cycleGroup').value = '';
+            document.getElementById('cycleAmount').value = '0';
+        });
+        // ---------- Add Plan (clear) ----------
+        document.getElementById('addPlanBtn').addEventListener('click', async () => {
+            const n = document.getElementById('planName').value.trim();
+            const pr = document.getElementById('planPrice').value;
+            if (!n||!pr) return showNotification('Error','Name and price required');
+            await supabase.from('investment_plans').insert([{ name:n, price:Number(pr), expected_return:Number(document.getElementById('planReturn').value||pr), duration:document.getElementById('planDuration').value, risk:document.getElementById('planRisk').value, risk_level:1, image_url:document.getElementById('planImage').value, slots_left:Number(document.getElementById('planSlots').value)||5, status:'available', badge:document.getElementById('planBadge').value }]);
+            showNotification('Success','Plan added'); loadAllData();
+            document.getElementById('planName').value = '';
+            document.getElementById('planPrice').value = '';
+            document.getElementById('planReturn').value = '';
+            document.getElementById('planImage').value = '';
+            document.getElementById('planSlots').value = '5';
+        });
+        // ---------- Publish Update (clear) ----------
+        document.getElementById('publishUpdateBtn').addEventListener('click', async () => {
+            const t = document.getElementById('updTitle').value.trim();
+            const e = document.getElementById('updExcerpt').value.trim();
+            const d = document.getElementById('updDetail').value.trim();
+            if (!t||!e||!d) return showNotification('Error','Fill all fields');
+            await supabase.from('updates').insert([{ title:t, excerpt:e, detail:d, category:document.getElementById('updCategory').value, image_url:document.getElementById('updImage').value, status:'published' }]);
+            showNotification('Success','Published'); loadAllData();
+            document.getElementById('updTitle').value = '';
+            document.getElementById('updExcerpt').value = '';
+            document.getElementById('updDetail').value = '';
+            document.getElementById('updImage').value = '';
+        });
+        // ---------- Update Slots (clear) ----------
+        document.getElementById('updateSlotsBtn').addEventListener('click', async () => {
+            const pl = document.getElementById('slotPlan').value;
+            const c = document.getElementById('slotCount').value;
+            if (!pl||!c) return showNotification('Error','Select plan and count');
+            await supabase.from('investment_plans').update({ slots_left: Number(c) }).eq('name', pl);
+            showNotification('Success','Slots updated'); loadAllData();
+            document.getElementById('slotCount').value = '';
+        });
+        // ---------- Change Password (clear) ----------
+        document.getElementById('changePasswordBtn').addEventListener('click', async () => {
+            const p = document.getElementById('newPass').value.trim();
+            const cp = document.getElementById('confirmPass').value.trim();
+            if (!p || p !== cp) return showNotification('Error','Passwords do not match');
+            const { error } = await supabase.auth.updateUser({ password: p });
+            if (error) showNotification('Error', error.message);
+            else showNotification('Success','Password updated');
+            document.getElementById('newPass').value = '';
+            document.getElementById('confirmPass').value = '';
+        });
+
+        // Image upload (unchanged)
+        async function uploadImage(fileInputId, textFieldId) {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) return;
+            const path = `plans/${Date.now()}_${file.name}`;
+            const { error } = await supabase.storage.from('images').upload(path, file);
+            if (error) return showNotification('Error', 'Upload failed');
+            const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+            document.getElementById(textFieldId).value = publicUrl;
+            showNotification('Success', 'Image uploaded');
+        }
+        document.getElementById('planImageUploadBtn').addEventListener('click', () => document.getElementById('planImageFile').click());
+        document.getElementById('planImageFile').addEventListener('change', () => uploadImage('planImageFile', 'planImage'));
+        document.getElementById('updImageUploadBtn').addEventListener('click', () => document.getElementById('updImageFile').click());
+        document.getElementById('updImageFile').addEventListener('change', () => uploadImage('updImageFile', 'updImage'));
+
+        // ---------- Member Manager Table (Update Member) ----------
+        async function loadMemberManagerTable() {
+            try {
+                const { data, error } = await supabase.from('members').select('*').order('name');
+                if (error) throw error;
+                allMembers = data || [];
+                renderMemberManagerTable();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('memberManagerBody').innerHTML = `<tr><td colspan="8" style="color:#ff5252;">Error loading members: ${err.message}</td></tr>`;
+                showToast('Failed to load members', true);
+            }
+        }
+
+        function renderMemberManagerTable() {
+            const tbody = document.getElementById('memberManagerBody');
+            if (!allMembers.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No members found.</td></tr>';
+                return;
+            }
+            let html = '';
+            allMembers.forEach(m => {
+                const statusBadge = m.status === 'active' ? '<span class="badge badge-success">active</span>' : '<span class="badge badge-danger">inactive</span>';
+                html += `<tr data-phone="${escapeHtml(m.phone)}">
+                             <td>${m.id || '-'}</td>
+                             <td>${escapeHtml(m.name) || '-'}</td>
+                             <td>${escapeHtml(m.phone) || '-'}</td>
+                             <td>${escapeHtml(m.email) || '-'}</td>
+                             <td>${escapeHtml(m.group_name) || '-'}</td>
+                             <td>UGX ${(m.balance || 0).toLocaleString()}</td>
+                             <td>UGX ${(m.total_invested || 0).toLocaleString()}</td>
+                             <td>${statusBadge}</td>
+                           </tr>`;
+            });
+            tbody.innerHTML = html;
+            document.querySelectorAll('#memberManagerBody tr').forEach(row => {
+                row.addEventListener('click', () => {
+                    document.querySelectorAll('#memberManagerBody tr').forEach(r => r.classList.remove('selected'));
+                    row.classList.add('selected');
+                    const phone = row.dataset.phone;
+                    selectedMember = allMembers.find(m => m.phone === phone);
+                    if (selectedMember) openPasswordModal();
+                });
+            });
+        }
+
+        // Password modal & edit logic (unchanged)
+        const passwordModal = document.getElementById('passwordModal');
+        const adminPasswordInput = document.getElementById('adminPasswordInput');
+        const passwordError = document.getElementById('passwordError');
+        const editPanel = document.getElementById('editMemberPanel');
+        const editForm = document.getElementById('editMemberForm');
+        const editError = document.getElementById('editError');
+        const editSuccess = document.getElementById('editSuccess');
+
+        function openPasswordModal() {
+            adminPasswordInput.value = '';
+            passwordError.style.display = 'none';
+            passwordModal.classList.add('active');
+        }
+        function closePasswordModal() {
+            passwordModal.classList.remove('active');
+            if (editPanel.style.display !== 'block') {
+                document.querySelectorAll('#memberManagerBody tr').forEach(r => r.classList.remove('selected'));
+                selectedMember = null;
+            }
+        }
+        async function verifyPasswordAndOpenEdit() {
+            const entered = adminPasswordInput.value.trim();
+            if (!entered) {
+                passwordError.textContent = 'Please enter admin password.';
+                passwordError.style.display = 'block';
+                return;
+            }
+            if (entered !== ADMIN_PASSWORD) {
+                passwordError.textContent = 'Incorrect password. Access denied.';
+                passwordError.style.display = 'block';
+                return;
+            }
+            passwordModal.classList.remove('active');
+            populateEditForm(selectedMember);
+            editPanel.style.display = 'block';
+            editPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+        function populateEditForm(member) {
+            document.getElementById('editName').value = member.name || '';
+            document.getElementById('editPhone').value = member.phone || '';
+            document.getElementById('editEmail').value = member.email || '';
+            document.getElementById('editGroup').value = member.group_name || '';
+            document.getElementById('editBalance').value = member.balance || 0;
+            document.getElementById('editInvested').value = member.total_invested || 0;
+            document.getElementById('editStatus').value = member.status || 'active';
+            document.getElementById('editPassword').value = '';
+            editError.style.display = 'none';
+            editSuccess.style.display = 'none';
+        }
+        async function saveMemberChanges(event) {
+            event.preventDefault();
+            if (!selectedMember) {
+                showToast('No member selected', true);
+                return;
+            }
+            const updatedData = {
+                name: document.getElementById('editName').value.trim(),
+                phone: document.getElementById('editPhone').value.trim(),
+                email: document.getElementById('editEmail').value.trim(),
+                group_name: document.getElementById('editGroup').value.trim(),
+                balance: parseInt(document.getElementById('editBalance').value) || 0,
+                total_invested: parseInt(document.getElementById('editInvested').value) || 0,
+                status: document.getElementById('editStatus').value
+            };
+            const newPassword = document.getElementById('editPassword').value.trim();
+            if (newPassword) updatedData.password_hash = newPassword;
+
+            if (!updatedData.name || !updatedData.phone) {
+                editError.textContent = 'Name and Phone are required.';
+                editError.style.display = 'block';
+                return;
+            }
+            editError.style.display = 'none';
+            editSuccess.style.display = 'none';
+
+            try {
+                const { error } = await supabase
+                    .from('members')
+                    .update(updatedData)
+                    .eq('phone', selectedMember.phone);
+                if (error) throw error;
+                Object.assign(selectedMember, updatedData);
+                if (newPassword) selectedMember.password_hash = newPassword;
+                await loadMemberManagerTable();
+                await loadAllData();
+                editSuccess.textContent = '✅ Member updated successfully!';
+                editSuccess.style.display = 'block';
+                showToast('Member details updated');
+                document.getElementById('editPassword').value = '';
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('#memberManagerBody tr');
+                    rows.forEach(row => {
+                        if (row.dataset.phone === updatedData.phone) row.classList.add('selected');
+                        else row.classList.remove('selected');
+                    });
+                }, 100);
+            } catch (err) {
+                editError.textContent = 'Save failed: ' + err.message;
+                editError.style.display = 'block';
+                showToast('Error saving member: ' + err.message, true);
+            }
+        }
+        function cancelEdit() {
+            editPanel.style.display = 'none';
+            document.querySelectorAll('#memberManagerBody tr').forEach(r => r.classList.remove('selected'));
+            selectedMember = null;
+        }
+
+        document.getElementById('verifyPasswordBtn').addEventListener('click', verifyPasswordAndOpenEdit);
+        document.getElementById('closeModalBtn').addEventListener('click', closePasswordModal);
+        document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+        editForm.addEventListener('submit', saveMemberChanges);
+        passwordModal.addEventListener('click', (e) => { if (e.target === passwordModal) closePasswordModal(); });
+
+        // Auto login
+        (async function autoLogin() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('dashboardScreen').style.display = 'block';
+                await loadAllData();
+                await loadMemberManagerTable();
+            }
+        })();
+    })();
+</script>
+</body>
+</html>
