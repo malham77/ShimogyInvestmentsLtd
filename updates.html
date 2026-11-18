@@ -6,13 +6,13 @@
   <title>News &amp; Updates | SHIMOGY Investment Group Uganda</title>
   <meta name="description" content="Official company announcements, savings tips, member stories, and upcoming events from SHIMOGY Investment Group in Kampala, Uganda." />
   <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="/updates.html" />
+  <link rel="canonical" href="updates.html" />
   <meta property="og:title" content="News &amp; Updates | SHIMOGY Investment Group Uganda" />
   <meta property="og:description" content="Latest news, investment milestones, and savings announcements from SHIMOGY Investment Group." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/assets/aistudio/graph_ddbd7244.jpg" />
-  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <meta property="og:image" content="assets/aistudio/graph_ddbd7244.jpg" />
+  <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -20,7 +20,7 @@
   <header class="site-header" role="banner">
     <div class="header-inner">
       <a href="index.html" class="brand-link" aria-label="SHIMOGY Investment Group Home">
-        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
+        <img src="assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
         <span>SHIMOGY</span>
       </a>
 
@@ -154,7 +154,7 @@
 
   <main id="main-content" tabindex="-1">
     <section class="page-banner">
-      <img src="/assets/aistudio/graph_ddbd7244.jpg" alt="" class="page-banner-bg" aria-hidden="true" />
+      <img src="assets/aistudio/graph_ddbd7244.jpg" alt="" class="page-banner-bg" aria-hidden="true" />
       <div class="page-banner-scrim" aria-hidden="true"></div>
       <div class="container">
         <span class="eyebrow-text">SHIMOGY Editorial Bulletin · <span id="todayDateLabel"></span></span>
@@ -268,7 +268,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
-      <img id="storyModalImage" src="/assets/aistudio/graph_ddbd7244.jpg" alt="" style="width:100%;height:220px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:14px;" />
+      <img id="storyModalImage" src="assets/aistudio/graph_ddbd7244.jpg" alt="" style="width:100%;height:220px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:14px;" />
       <p id="storyModalDate" class="metric-label" style="margin-bottom:10px;"></p>
       <p id="storyModalBody" style="font-size:0.96rem;color:var(--text-secondary);line-height:1.72;margin-bottom:18px;"></p>
       <div style="display:flex;justify-content:flex-end;">
@@ -358,7 +358,8 @@
     </div>
   </div>
 
-  <script src="/js/site.js"></script>
+  <script src="js/standalone-db.js"></script>
+  <script src="js/site.js"></script>
   <script>
     (function () {
       'use strict';
@@ -390,7 +391,7 @@
         tagEl.className = 'story-tag ' + tagClass(item.category);
         document.getElementById('storyModalTitle').textContent = item.title || '';
         var imgEl = document.getElementById('storyModalImage');
-        imgEl.src = item.image_url || '/assets/aistudio/graph_ddbd7244.jpg';
+        imgEl.src = site.assetUrl(item.image_url || 'assets/aistudio/graph_ddbd7244.jpg');
         imgEl.alt = item.image_alt || item.title || 'SHIMOGY news update';
         document.getElementById('storyModalDate').textContent = 'Published: ' + (item.published_date || '');
         document.getElementById('storyModalBody').textContent = item.detail || item.excerpt || '';
@@ -440,7 +441,7 @@
 
         heroStory.style.display = 'grid';
         var lead = list[0];
-        heroMain.style.backgroundImage = "url('" + lead.image_url + "')";
+        heroMain.style.backgroundImage = "url('" + site.assetUrl(lead.image_url) + "')";
         heroMain.onclick = function () { openStoryDetail(lead); };
         var hTag = document.getElementById('heroTag');
         hTag.textContent = (lead.category || 'news').toUpperCase();
@@ -451,7 +452,7 @@
         var sideStories = list.slice(1, 4);
         heroSide.innerHTML = sideStories.map(function (s, idx) {
           return (
-            '<button type="button" class="hero-side-card" data-side-idx="' + idx + '" style="background-image:url(\'' + site.escapeHtml(s.image_url) + '\');">' +
+            '<button type="button" class="hero-side-card" data-side-idx="' + idx + '" style="background-image:url(\'' + site.escapeHtml(site.assetUrl(s.image_url)) + '\');">' +
               '<div class="side-overlay">' +
                 '<span class="story-tag ' + tagClass(s.category) + '">' + site.escapeHtml((s.category || 'news').toUpperCase()) + '</span>' +
                 '<h3>' + site.escapeHtml(s.title) + '</h3>' +
@@ -478,7 +479,7 @@
             return (
               '<article class="news-card">' +
                 '<div class="news-card-img-wrap">' +
-                  '<img src="' + site.escapeHtml(u.image_url) + '" alt="' + site.escapeHtml(u.image_alt || u.title) + '" class="news-card-img" loading="lazy" />' +
+                  '<img src="' + site.escapeHtml(site.assetUrl(u.image_url)) + '" alt="' + site.escapeHtml(u.image_alt || u.title) + '" class="news-card-img" loading="lazy" />' +
                   '<span class="story-tag ' + tagClass(u.category) + '">' + site.escapeHtml((u.category || 'news').toUpperCase()) + '</span>' +
                 '</div>' +
                 '<div class="news-card-body">' +

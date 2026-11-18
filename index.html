@@ -6,23 +6,23 @@
   <title>SHIMOGY Investment Group | Smart Investments &amp; Savings Uganda</title>
   <meta name="description" content="SHIMOGY Investment Group Ltd in Kawempe Tula, Kampala offers structured local business investments, Current &amp; Fixed savings accounts, community cycles, and member loans." />
   <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="/index.html" />
+  <link rel="canonical" href="index.html" />
   <meta property="og:title" content="SHIMOGY Investment Group | Smart Investments &amp; Savings Uganda" />
   <meta property="og:description" content="Structured business investment plans, 7% Fixed savings accounts, rotating cycles, and member financing in Kampala, Uganda." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/assets/aistudio/partnership_65dac3a6.jpg" />
+  <meta property="og:image" content="assets/aistudio/partnership_65dac3a6.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SHIMOGY Investment Group | Smart Investments &amp; Savings" />
   <meta name="twitter:description" content="Structured business investment plans, savings accounts, and member financing in Kampala, Uganda." />
-  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="css/style.css" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "FinancialService",
       "name": "SHIMOGY Investment Group Ltd",
       "description": "Structured local business investments, Current and Fixed savings accounts, community saving cycles, and member loans in Kampala, Uganda.",
-      "image": "/assets/aistudio/logo2_be71428a.jpg",
+      "image": "assets/aistudio/logo2_be71428a.jpg",
       "telephone": "+256752259416",
       "email": "shimogygroup@gmail.com",
       "address": {
@@ -42,7 +42,7 @@
   <header class="site-header" role="banner">
     <div class="header-inner">
       <a href="index.html" class="brand-link" aria-label="SHIMOGY Investment Group Home">
-        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
+        <img src="assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
         <span>SHIMOGY</span>
       </a>
 
@@ -172,7 +172,7 @@
     <section class="hero-carousel" aria-label="Featured SHIMOGY announcements and investment highlights" aria-roledescription="carousel">
       <div id="heroSlidesContainer" class="hero-slides-container">
         <article class="hero-slide active">
-          <img src="/assets/aistudio/partnership_65dac3a6.jpg" alt="Business partners shaking hands over a structured investment partnership agreement" class="hero-slide-bg" />
+          <img src="assets/aistudio/partnership_65dac3a6.jpg" alt="Business partners shaking hands over a structured investment partnership agreement" class="hero-slide-bg" />
           <div class="hero-slide-scrim" aria-hidden="true"></div>
           <div class="hero-slide-inner">
             <div class="hero-slide-content">
@@ -223,7 +223,7 @@
 
     <!-- How to Invest Smart With SIG (Photo Backdrop + Dark Navy Scrim, PDF Page 2 #3) -->
     <section class="section section-photo-band" aria-labelledby="howToInvestHeading">
-      <img src="/assets/aistudio/graph_ddbd7244.jpg" alt="" class="section-photo-bg" aria-hidden="true" />
+      <img src="assets/aistudio/graph_ddbd7244.jpg" alt="" class="section-photo-bg" aria-hidden="true" />
       <div class="section-photo-scrim" aria-hidden="true"></div>
       <div class="container">
         <div class="section-heading center">
@@ -308,7 +308,7 @@
 
     <!-- Direct Action Band with Background Photo -->
     <section class="section section-photo-band" aria-label="Quick Service Navigation">
-      <img src="/assets/aistudio/restaurant_ad866c9e.jpg" alt="" class="section-photo-bg" aria-hidden="true" />
+      <img src="assets/aistudio/restaurant_ad866c9e.jpg" alt="" class="section-photo-bg" aria-hidden="true" />
       <div class="section-photo-scrim" aria-hidden="true"></div>
       <div class="container">
         <div class="two-col-grid">
@@ -427,7 +427,8 @@
     </div>
   </div>
 
-  <script src="/js/site.js"></script>
+  <script src="js/standalone-db.js"></script>
+  <script src="js/site.js"></script>
   <script>
     (function () {
       'use strict';
@@ -445,7 +446,7 @@
         container.innerHTML = slides.map(function (s, idx) {
           return (
             '<article class="hero-slide' + (idx === 0 ? ' active' : '') + '" aria-hidden="' + (idx === 0 ? 'false' : 'true') + '">' +
-              '<img src="' + site.escapeHtml(s.image_url) + '" alt="' + site.escapeHtml(s.image_alt || s.title) + '" class="hero-slide-bg" />' +
+              '<img src="' + site.escapeHtml(site.assetUrl(s.image_url)) + '" alt="' + site.escapeHtml(s.image_alt || s.title) + '" class="hero-slide-bg" />' +
               '<div class="hero-slide-scrim" aria-hidden="true"></div>' +
               '<div class="hero-slide-inner">' +
                 '<div class="hero-slide-content">' +
@@ -542,7 +543,7 @@
           return (
             '<article class="plan-card">' +
               '<div class="card-media">' +
-                '<img src="' + site.escapeHtml(p.image_url) + '" alt="' + site.escapeHtml(p.image_alt || p.name) + '" loading="lazy" />' +
+                '<img src="' + site.escapeHtml(site.assetUrl(p.image_url)) + '" alt="' + site.escapeHtml(p.image_alt || p.name) + '" loading="lazy" />' +
                 (p.badge ? '<span class="card-tag-corner">' + site.escapeHtml(p.badge) + '</span>' : '') +
               '</div>' +
               '<div class="card-body">' +
@@ -579,7 +580,7 @@
             '<article class="testimonial-card">' +
               '<blockquote class="testimonial-quote">"' + site.escapeHtml(t.quote) + '"</blockquote>' +
               '<div class="testimonial-author-row">' +
-                '<img src="' + site.escapeHtml(t.photo_url) + '" alt="' + site.escapeHtml(t.photo_alt || ('Portrait of ' + t.client_name)) + '" class="testimonial-photo" width="58" height="58" loading="lazy" />' +
+                '<img src="' + site.escapeHtml(site.assetUrl(t.photo_url)) + '" alt="' + site.escapeHtml(t.photo_alt || ('Portrait of ' + t.client_name)) + '" class="testimonial-photo" width="58" height="58" loading="lazy" />' +
                 '<div>' +
                   '<div class="testimonial-name">' + site.escapeHtml(t.client_name) + '</div>' +
                   '<div class="testimonial-role">' + site.escapeHtml(t.role) + (t.location ? ' · ' + site.escapeHtml(t.location) : '') + '</div>' +

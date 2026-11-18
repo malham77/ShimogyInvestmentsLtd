@@ -6,8 +6,8 @@
   <title>Admin Operations Console | SHIMOGY Investment Group</title>
   <meta name="description" content="Operations Team administration console for managing SHIMOGY website content, members, investments, savings, loans, cycles, and requests." />
   <meta name="robots" content="noindex, nofollow" />
-  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <a href="#adminMain" class="skip-link">Skip to main workspace</a>
@@ -16,7 +16,7 @@
   <div id="adminLoginView" style="min-height:100vh;background:linear-gradient(155deg, var(--navy-950) 0%, var(--navy-900) 60%, var(--navy-700) 100%);display:flex;align-items:center;justify-content:center;padding:24px;">
     <div class="form-card" style="max-width:440px;width:100%;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
-        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="46" height="46" style="object-fit:contain;border-radius:8px;border:1px solid var(--border-light);" />
+        <img src="assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="46" height="46" style="object-fit:contain;border-radius:8px;border:1px solid var(--border-light);" />
         <div>
           <h1 style="font-size:1.55rem;margin-bottom:2px;">SHIMOGY Admin</h1>
           <p style="font-size:0.82rem;color:var(--text-muted);">Operations Team Console</p>
@@ -50,7 +50,7 @@
   <div id="adminWorkspaceView" class="dashboard-shell" style="display:none;">
     <aside id="adminSidebar" class="admin-sidebar" aria-label="Admin Navigation Sidebar">
       <div class="sidebar-brand">
-        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="40" height="40" />
+        <img src="assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY crest" width="40" height="40" />
         <div>
           <div class="sidebar-brand-title">SHIMOGY</div>
           <div class="sidebar-brand-sub">Operations Console</div>
@@ -172,11 +172,11 @@
                 <div class="form-field"><label for="setWhatsapp">WhatsApp Number (digits only, e.g. 256752259416)</label><input type="text" id="setWhatsapp" /></div>
                 <div class="form-field"><label for="setEmail">Official Business Email</label><input type="email" id="setEmail" /></div>
                 <div class="form-field"><label for="setHours">Working Hours</label><input type="text" id="setHours" /></div>
-                <div class="form-field"><label for="setLogoUrl">Brand Logo External URL or Database Path</label><input type="text" id="setLogoUrl" placeholder="/assets/aistudio/logo2_be71428a.jpg or https://..." /></div>
+                <div class="form-field"><label for="setLogoUrl">Brand Logo External URL or Database Path</label><input type="text" id="setLogoUrl" placeholder="assets/aistudio/logo2_be71428a.jpg or https://..." /></div>
                 <div class="form-field"><label for="setLogoUpload">Or Upload Brand Logo to Database</label><input type="file" id="setLogoUpload" accept="image/*" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="setLogoPreview" src="/assets/aistudio/logo2_be71428a.jpg" alt="Current brand logo preview" class="img-preview-thumb" style="object-fit:contain;" />
+                <img id="setLogoPreview" src="assets/aistudio/logo2_be71428a.jpg" alt="Current brand logo preview" class="img-preview-thumb" style="object-fit:contain;" />
                 <span class="img-preview-caption">Live Brand Logo Preview (stored in SQLite database when uploaded, or loaded from external URL)</span>
               </div>
 
@@ -218,14 +218,14 @@
                 <div class="form-field"><label for="heroCtaText">Button Label</label><input type="text" id="heroCtaText" value="Explore Investment Plans" /></div>
                 <div class="form-field"><label for="heroCtaLink">Button Link</label><input type="text" id="heroCtaLink" value="investments.html" /></div>
                 <div class="form-field"><label for="heroOrder">Display Order</label><input type="number" id="heroOrder" value="1" /></div>
-                <div class="form-field"><label for="heroImageUrl">Background Image URL (External Link or Uploaded Path)</label><input type="text" id="heroImageUrl" required value="/assets/aistudio/partnership_65dac3a6.jpg" placeholder="https://... or /api/media/..." /></div>
+                <div class="form-field"><label for="heroImageUrl">Background Image URL (External Link or Uploaded Path)</label><input type="text" id="heroImageUrl" required value="assets/aistudio/partnership_65dac3a6.jpg" placeholder="https://... or /api/media/..." /></div>
               </div>
               <div class="form-grid">
                 <div class="form-field"><label for="heroImageUpload">Or Upload New Hero Image to Database</label><input type="file" id="heroImageUpload" accept="image/*" /></div>
                 <div class="form-field"><label for="heroImageAlt">Image Alt Description (SEO &amp; Accessibility)</label><input type="text" id="heroImageAlt" required placeholder="Describe what is shown in the hero photo" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="heroImgPreview" src="/assets/aistudio/partnership_65dac3a6.jpg" alt="Hero slide image preview" class="img-preview-thumb" />
+                <img id="heroImgPreview" src="assets/aistudio/partnership_65dac3a6.jpg" alt="Hero slide image preview" class="img-preview-thumb" />
                 <span class="img-preview-caption">Live Hero Image Preview — paste a live URL above or upload a file directly into the database.</span>
               </div>
               <div class="form-field"><label for="heroSubtitle">Subtitle Paragraph</label><textarea id="heroSubtitle" required></textarea></div>
@@ -259,11 +259,11 @@
                 <div class="form-field"><label for="testRole">Client Role / Status</label><input type="text" id="testRole" value="Verified Client" required /></div>
                 <div class="form-field"><label for="testLocation">Location</label><input type="text" id="testLocation" value="Kampala, Uganda" /></div>
                 <div class="form-field"><label for="testOrder">Display Order</label><input type="number" id="testOrder" value="1" /></div>
-                <div class="form-field"><label for="testPhotoUrl">Client Photo URL (External Link or Database Path)</label><input type="text" id="testPhotoUrl" value="/assets/aistudio/josephine_a1a0850e.jpg" placeholder="https://... or /api/media/..." required /></div>
+                <div class="form-field"><label for="testPhotoUrl">Client Photo URL (External Link or Database Path)</label><input type="text" id="testPhotoUrl" value="assets/aistudio/josephine_a1a0850e.jpg" placeholder="https://... or /api/media/..." required /></div>
                 <div class="form-field"><label for="testPhotoUpload">Or Upload Client Photo to Database</label><input type="file" id="testPhotoUpload" accept="image/*" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="testPhotoPreview" src="/assets/aistudio/josephine_a1a0850e.jpg" alt="Investor portrait preview" class="img-preview-thumb" style="border-radius:50%;width:56px;height:56px;" />
+                <img id="testPhotoPreview" src="assets/aistudio/josephine_a1a0850e.jpg" alt="Investor portrait preview" class="img-preview-thumb" style="border-radius:50%;width:56px;height:56px;" />
                 <span class="img-preview-caption">Investor Photo Preview — automatically updates when you paste an image link or upload a file to the database.</span>
               </div>
               <div class="form-field"><label for="testPhotoAlt">Photo Alt Text</label><input type="text" id="testPhotoAlt" placeholder="Portrait of verified SHIMOGY member" /></div>
@@ -307,11 +307,11 @@
                   <select id="planStatus"><option value="available">Available</option><option value="closed">Closed / Full</option></select>
                 </div>
                 <div class="form-field"><label for="planBadge">Badge Tag (Optional)</label><input type="text" id="planBadge" placeholder="e.g., Popular, Trending, New" /></div>
-                <div class="form-field"><label for="planImageUrl">Plan Image URL (External or Database Path)</label><input type="text" id="planImageUrl" value="/assets/aistudio/graph_ddbd7244.jpg" required /></div>
+                <div class="form-field"><label for="planImageUrl">Plan Image URL (External or Database Path)</label><input type="text" id="planImageUrl" value="assets/aistudio/graph_ddbd7244.jpg" required /></div>
                 <div class="form-field"><label for="planImageUpload">Or Upload Plan Image to Database</label><input type="file" id="planImageUpload" accept="image/*" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="planImgPreview" src="/assets/aistudio/graph_ddbd7244.jpg" alt="Investment plan preview" class="img-preview-thumb" />
+                <img id="planImgPreview" src="assets/aistudio/graph_ddbd7244.jpg" alt="Investment plan preview" class="img-preview-thumb" />
                 <span class="img-preview-caption">Live Investment Plan Image Preview</span>
               </div>
               <div class="form-field"><label for="planImageAlt">Image Alt Text</label><input type="text" id="planImageAlt" placeholder="Descriptive image alt text" /></div>
@@ -353,12 +353,12 @@
                     <option value="Customize">Customize</option>
                   </select>
                 </div>
-                <div class="form-field"><label for="pubCycleImageUrl">Cycle Image URL (External or Database Path)</label><input type="text" id="pubCycleImageUrl" value="/assets/aistudio/partnership_65dac3a6.jpg" required /></div>
+                <div class="form-field"><label for="pubCycleImageUrl">Cycle Image URL (External or Database Path)</label><input type="text" id="pubCycleImageUrl" value="assets/aistudio/partnership_65dac3a6.jpg" required /></div>
                 <div class="form-field"><label for="pubCycleImageUpload">Or Upload Cycle Image to Database</label><input type="file" id="pubCycleImageUpload" accept="image/*" /></div>
                 <div class="form-field"><label for="pubCycleImageAlt">Image Alt Text</label><input type="text" id="pubCycleImageAlt" placeholder="Descriptive alt text" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="pubCycleImgPreview" src="/assets/aistudio/partnership_65dac3a6.jpg" alt="Savings cycle preview" class="img-preview-thumb" />
+                <img id="pubCycleImgPreview" src="assets/aistudio/partnership_65dac3a6.jpg" alt="Savings cycle preview" class="img-preview-thumb" />
                 <span class="img-preview-caption">Live Public Cycle Image Preview</span>
               </div>
               <div class="form-field"><label for="pubCycleDesc">Cycle Description</label><textarea id="pubCycleDesc"></textarea></div>
@@ -409,12 +409,12 @@
                   </select>
                 </div>
                 <div class="form-field"><label for="updDate">Published Date</label><input type="date" id="updDate" required /></div>
-                <div class="form-field"><label for="updImageUrl">Image URL (External or Database Path)</label><input type="text" id="updImageUrl" value="/assets/aistudio/graph_ddbd7244.jpg" required /></div>
+                <div class="form-field"><label for="updImageUrl">Image URL (External or Database Path)</label><input type="text" id="updImageUrl" value="assets/aistudio/graph_ddbd7244.jpg" required /></div>
                 <div class="form-field"><label for="updImageUpload">Or Upload Update Image to Database</label><input type="file" id="updImageUpload" accept="image/*" /></div>
                 <div class="form-field"><label for="updImageAlt">Image Alt Text</label><input type="text" id="updImageAlt" placeholder="Descriptive alt text" /></div>
               </div>
               <div class="img-preview-box">
-                <img id="updImgPreview" src="/assets/aistudio/graph_ddbd7244.jpg" alt="Update story image preview" class="img-preview-thumb" />
+                <img id="updImgPreview" src="assets/aistudio/graph_ddbd7244.jpg" alt="Update story image preview" class="img-preview-thumb" />
                 <span class="img-preview-caption">Live Story Image Preview</span>
               </div>
               <div class="form-field"><label for="updExcerpt">Short Excerpt</label><input type="text" id="updExcerpt" required /></div>
@@ -677,8 +677,9 @@
     </div>
   </div>
 
-  <script src="/js/site.js"></script>
-  <script src="/js/chart.umd.min.js"></script>
-  <script src="/js/admin.js"></script>
+  <script src="js/standalone-db.js"></script>
+  <script src="js/site.js"></script>
+  <script src="js/chart.umd.min.js"></script>
+  <script src="js/admin.js"></script>
 </body>
 </html>

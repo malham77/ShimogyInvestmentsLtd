@@ -6,13 +6,13 @@
   <title>Savings Cycles | SHIMOGY Investment Group Uganda</title>
   <meta name="description" content="Join active community savings cycles or propose a new rotating group with custom member counts and payout durations at SHIMOGY Investment Group." />
   <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="/cycles.html" />
+  <link rel="canonical" href="cycles.html" />
   <meta property="og:title" content="Savings Cycles | SHIMOGY Investment Group Uganda" />
   <meta property="og:description" content="Structured community savings circles with Operations Team oversight in Kampala, Uganda." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/assets/aistudio/partnership_65dac3a6.jpg" />
-  <link rel="icon" type="image/jpeg" href="/assets/aistudio/logo2_be71428a.jpg" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <meta property="og:image" content="assets/aistudio/partnership_65dac3a6.jpg" />
+  <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -20,7 +20,7 @@
   <header class="site-header" role="banner">
     <div class="header-inner">
       <a href="index.html" class="brand-link" aria-label="SHIMOGY Investment Group Home">
-        <img src="/assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
+        <img src="assets/aistudio/logo2_be71428a.jpg" alt="SHIMOGY Investment Group crest" class="brand-logo" width="44" height="44" />
         <span>SHIMOGY</span>
       </a>
 
@@ -145,7 +145,7 @@
 
   <main id="main-content" tabindex="-1">
     <section class="page-banner">
-      <img src="/assets/aistudio/partnership_65dac3a6.jpg" alt="" class="page-banner-bg" aria-hidden="true" />
+      <img src="assets/aistudio/partnership_65dac3a6.jpg" alt="" class="page-banner-bg" aria-hidden="true" />
       <div class="page-banner-scrim" aria-hidden="true"></div>
       <div class="container">
         <span class="eyebrow-text">Community Saving Circles</span>
@@ -393,7 +393,8 @@
     </div>
   </div>
 
-  <script src="/js/site.js"></script>
+  <script src="js/standalone-db.js"></script>
+  <script src="js/site.js"></script>
   <script>
     (function () {
       'use strict';
@@ -412,7 +413,7 @@
           return (
             '<article class="plan-card">' +
               '<div class="card-media">' +
-                '<img src="' + site.escapeHtml(c.image_url) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" loading="lazy" />' +
+                '<img src="' + site.escapeHtml(site.assetUrl(c.image_url)) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" loading="lazy" />' +
               '</div>' +
               '<div class="card-body">' +
                 '<div class="card-meta-line">' +

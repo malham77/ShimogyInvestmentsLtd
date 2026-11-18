@@ -71,7 +71,7 @@
     var imgEl = document.getElementById(previewImgId);
     if (!imgEl) return;
     var cleanUrl = String(url || '').trim();
-    imgEl.src = cleanUrl || fallbackUrl || '/assets/aistudio/logo2_be71428a.jpg';
+    imgEl.src = site.assetUrl(cleanUrl || fallbackUrl || 'assets/aistudio/logo2_be71428a.jpg');
   }
 
   function bindImagePreview(urlInputId, previewImgId, fallbackUrl) {
@@ -79,8 +79,9 @@
     var imgEl = document.getElementById(previewImgId);
     if (!urlEl || !imgEl) return;
     imgEl.addEventListener('error', function () {
-      if (fallbackUrl && imgEl.getAttribute('src') !== fallbackUrl) {
-        imgEl.src = fallbackUrl;
+      var safeFallback = site.assetUrl(fallbackUrl);
+      if (fallbackUrl && imgEl.getAttribute('src') !== safeFallback) {
+        imgEl.src = safeFallback;
       }
     });
     var sync = function () { setPreviewImg(previewImgId, urlEl.value, fallbackUrl); };
@@ -311,7 +312,7 @@
       var el = document.getElementById(id);
       if (el) el.value = s[map[id]] || '';
     });
-    setPreviewImg('setLogoPreview', s.logo_url, '/assets/aistudio/logo2_be71428a.jpg');
+    setPreviewImg('setLogoPreview', s.logo_url, 'assets/aistudio/logo2_be71428a.jpg');
   }
 
   function renderHeroSlides() {
@@ -320,7 +321,7 @@
       return (
         '<tr>' +
           '<td class="tabular-nums">' + site.escapeHtml(h.sort_order) + '</td>' +
-          '<td><img src="' + site.escapeHtml(h.image_url) + '" alt="' + site.escapeHtml(h.image_alt) + '" width="72" height="44" style="object-fit:cover;border-radius:4px;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(h.image_url)) + '" alt="' + site.escapeHtml(h.image_alt) + '" width="72" height="44" style="object-fit:cover;border-radius:4px;" /></td>' +
           '<td><strong>' + site.escapeHtml(h.title) + '</strong></td>' +
           '<td>' + site.escapeHtml(h.cta_text) + '</td>' +
           '<td style="display:flex;gap:6px;">' +
@@ -342,7 +343,7 @@
         document.getElementById('heroCtaText').value = item.cta_text || '';
         document.getElementById('heroCtaLink').value = item.cta_link || '';
         document.getElementById('heroImageUrl').value = item.image_url || '';
-        setPreviewImg('heroImgPreview', item.image_url, '/assets/aistudio/partnership_65dac3a6.jpg');
+        setPreviewImg('heroImgPreview', item.image_url, 'assets/aistudio/partnership_65dac3a6.jpg');
         document.getElementById('heroImageAlt').value = item.image_alt || '';
         document.getElementById('heroOrder').value = item.sort_order || 1;
         document.getElementById('cancelHeroEditBtn').style.display = 'inline-flex';
@@ -368,7 +369,7 @@
     tbody.innerHTML = state.testimonials.map(function (t) {
       return (
         '<tr>' +
-          '<td><img src="' + site.escapeHtml(t.photo_url) + '" alt="' + site.escapeHtml(t.photo_alt) + '" width="44" height="44" style="object-fit:cover;border-radius:50%;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(t.photo_url)) + '" alt="' + site.escapeHtml(t.photo_alt) + '" width="44" height="44" style="object-fit:cover;border-radius:50%;" /></td>' +
           '<td><strong>' + site.escapeHtml(t.client_name) + '</strong></td>' +
           '<td>' + site.escapeHtml(t.role) + ' · ' + site.escapeHtml(t.location) + '</td>' +
           '<td style="max-width:300px;">' + site.escapeHtml(t.quote) + '</td>' +
@@ -390,7 +391,7 @@
         document.getElementById('testLocation').value = item.location || '';
         document.getElementById('testOrder').value = item.sort_order || 1;
         document.getElementById('testPhotoUrl').value = item.photo_url || '';
-        setPreviewImg('testPhotoPreview', item.photo_url, '/assets/aistudio/josephine_a1a0850e.jpg');
+        setPreviewImg('testPhotoPreview', item.photo_url, 'assets/aistudio/josephine_a1a0850e.jpg');
         document.getElementById('testPhotoAlt').value = item.photo_alt || '';
         document.getElementById('testQuote').value = item.quote || '';
         document.getElementById('cancelTestEditBtn').style.display = 'inline-flex';
@@ -440,7 +441,7 @@
         document.getElementById('planStatus').value = p.status;
         document.getElementById('planBadge').value = p.badge || '';
         document.getElementById('planImageUrl').value = p.image_url;
-        setPreviewImg('planImgPreview', p.image_url, '/assets/aistudio/graph_ddbd7244.jpg');
+        setPreviewImg('planImgPreview', p.image_url, 'assets/aistudio/graph_ddbd7244.jpg');
         document.getElementById('planImageAlt').value = p.image_alt || '';
         document.getElementById('planDescription').value = p.description || '';
         document.getElementById('cancelPlanEditBtn').style.display = 'inline-flex';
@@ -462,7 +463,7 @@
     tbody.innerHTML = state.publicCycles.map(function (c) {
       return (
         '<tr>' +
-          '<td><img src="' + site.escapeHtml(c.image_url) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" width="64" height="40" style="object-fit:cover;border-radius:4px;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(c.image_url)) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" width="64" height="40" style="object-fit:cover;border-radius:4px;" /></td>' +
           '<td><strong>' + site.escapeHtml(c.name) + '</strong></td>' +
           '<td class="tabular-nums">' + site.formatUGX(c.contribution) + '</td>' +
           '<td>' + site.escapeHtml(c.payout_duration) + '</td>' +
@@ -484,7 +485,7 @@
         document.getElementById('pubCycleContrib').value = c.contribution;
         document.getElementById('pubCyclePayout').value = c.payout_duration || 'Monthly';
         document.getElementById('pubCycleImageUrl').value = c.image_url;
-        setPreviewImg('pubCycleImgPreview', c.image_url, '/assets/aistudio/partnership_65dac3a6.jpg');
+        setPreviewImg('pubCycleImgPreview', c.image_url, 'assets/aistudio/partnership_65dac3a6.jpg');
         document.getElementById('pubCycleImageAlt').value = c.image_alt || '';
         document.getElementById('pubCycleDesc').value = c.description || '';
         document.getElementById('cancelPubCycleEditBtn').style.display = 'inline-flex';
@@ -865,7 +866,7 @@
       document.getElementById('heroSlideForm').reset();
       document.getElementById('heroEditId').value = '';
       document.getElementById('cancelHeroEditBtn').style.display = 'none';
-      setPreviewImg('heroImgPreview', '', '/assets/aistudio/partnership_65dac3a6.jpg');
+      setPreviewImg('heroImgPreview', '', 'assets/aistudio/partnership_65dac3a6.jpg');
       showToast('Hero slide saved.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
@@ -875,7 +876,7 @@
     document.getElementById('heroSlideForm').reset();
     document.getElementById('heroEditId').value = '';
     this.style.display = 'none';
-    setPreviewImg('heroImgPreview', '', '/assets/aistudio/partnership_65dac3a6.jpg');
+    setPreviewImg('heroImgPreview', '', 'assets/aistudio/partnership_65dac3a6.jpg');
   });
 
   document.getElementById('testimonialForm').addEventListener('submit', function (e) {
@@ -898,7 +899,7 @@
       document.getElementById('testimonialForm').reset();
       document.getElementById('testEditId').value = '';
       document.getElementById('cancelTestEditBtn').style.display = 'none';
-      setPreviewImg('testPhotoPreview', '', '/assets/aistudio/josephine_a1a0850e.jpg');
+      setPreviewImg('testPhotoPreview', '', 'assets/aistudio/josephine_a1a0850e.jpg');
       showToast('Investor testimonial saved.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
@@ -908,7 +909,7 @@
     document.getElementById('testimonialForm').reset();
     document.getElementById('testEditId').value = '';
     this.style.display = 'none';
-    setPreviewImg('testPhotoPreview', '', '/assets/aistudio/josephine_a1a0850e.jpg');
+    setPreviewImg('testPhotoPreview', '', 'assets/aistudio/josephine_a1a0850e.jpg');
   });
 
   document.getElementById('publicPlanForm').addEventListener('submit', function (e) {
@@ -934,7 +935,7 @@
       document.getElementById('publicPlanForm').reset();
       document.getElementById('planEditId').value = '';
       document.getElementById('cancelPlanEditBtn').style.display = 'none';
-      setPreviewImg('planImgPreview', '', '/assets/aistudio/graph_ddbd7244.jpg');
+      setPreviewImg('planImgPreview', '', 'assets/aistudio/graph_ddbd7244.jpg');
       showToast('Investment plan saved.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
@@ -944,7 +945,7 @@
     document.getElementById('publicPlanForm').reset();
     document.getElementById('planEditId').value = '';
     this.style.display = 'none';
-    setPreviewImg('planImgPreview', '', '/assets/aistudio/graph_ddbd7244.jpg');
+    setPreviewImg('planImgPreview', '', 'assets/aistudio/graph_ddbd7244.jpg');
   });
 
   document.getElementById('publicCycleForm').addEventListener('submit', function (e) {
@@ -965,7 +966,7 @@
       document.getElementById('publicCycleForm').reset();
       document.getElementById('pubCycleEditId').value = '';
       document.getElementById('cancelPubCycleEditBtn').style.display = 'none';
-      setPreviewImg('pubCycleImgPreview', '', '/assets/aistudio/partnership_65dac3a6.jpg');
+      setPreviewImg('pubCycleImgPreview', '', 'assets/aistudio/partnership_65dac3a6.jpg');
       showToast('Public savings cycle saved (Status: Active).', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
@@ -975,7 +976,7 @@
     document.getElementById('publicCycleForm').reset();
     document.getElementById('pubCycleEditId').value = '';
     this.style.display = 'none';
-    setPreviewImg('pubCycleImgPreview', '', '/assets/aistudio/partnership_65dac3a6.jpg');
+    setPreviewImg('pubCycleImgPreview', '', 'assets/aistudio/partnership_65dac3a6.jpg');
   });
 
   var quickTickerForm = document.getElementById('quickTickerForm');
@@ -1007,7 +1008,7 @@
     apiFetch('/api/admin/updates', { method: 'POST', body: JSON.stringify(payload) })
       .then(function () {
         document.getElementById('publicUpdateForm').reset();
-        setPreviewImg('updImgPreview', '', '/assets/aistudio/graph_ddbd7244.jpg');
+        setPreviewImg('updImgPreview', '', 'assets/aistudio/graph_ddbd7244.jpg');
         showToast('Company update published.', false);
         loadOverview();
       })
@@ -1192,18 +1193,18 @@
   });
 
   // Bind image upload inputs and live preview thumbnails
-  bindImagePreview('setLogoUrl', 'setLogoPreview', '/assets/aistudio/logo2_be71428a.jpg');
-  bindImageUpload('setLogoUpload', 'setLogoUrl', 'setLogoPreview', '/assets/aistudio/logo2_be71428a.jpg');
-  bindImagePreview('heroImageUrl', 'heroImgPreview', '/assets/aistudio/partnership_65dac3a6.jpg');
-  bindImageUpload('heroImageUpload', 'heroImageUrl', 'heroImgPreview', '/assets/aistudio/partnership_65dac3a6.jpg');
-  bindImagePreview('testPhotoUrl', 'testPhotoPreview', '/assets/aistudio/josephine_a1a0850e.jpg');
-  bindImageUpload('testPhotoUpload', 'testPhotoUrl', 'testPhotoPreview', '/assets/aistudio/josephine_a1a0850e.jpg');
-  bindImagePreview('planImageUrl', 'planImgPreview', '/assets/aistudio/graph_ddbd7244.jpg');
-  bindImageUpload('planImageUpload', 'planImageUrl', 'planImgPreview', '/assets/aistudio/graph_ddbd7244.jpg');
-  bindImagePreview('pubCycleImageUrl', 'pubCycleImgPreview', '/assets/aistudio/partnership_65dac3a6.jpg');
-  bindImageUpload('pubCycleImageUpload', 'pubCycleImageUrl', 'pubCycleImgPreview', '/assets/aistudio/partnership_65dac3a6.jpg');
-  bindImagePreview('updImageUrl', 'updImgPreview', '/assets/aistudio/graph_ddbd7244.jpg');
-  bindImageUpload('updImageUpload', 'updImageUrl', 'updImgPreview', '/assets/aistudio/graph_ddbd7244.jpg');
+  bindImagePreview('setLogoUrl', 'setLogoPreview', 'assets/aistudio/logo2_be71428a.jpg');
+  bindImageUpload('setLogoUpload', 'setLogoUrl', 'setLogoPreview', 'assets/aistudio/logo2_be71428a.jpg');
+  bindImagePreview('heroImageUrl', 'heroImgPreview', 'assets/aistudio/partnership_65dac3a6.jpg');
+  bindImageUpload('heroImageUpload', 'heroImageUrl', 'heroImgPreview', 'assets/aistudio/partnership_65dac3a6.jpg');
+  bindImagePreview('testPhotoUrl', 'testPhotoPreview', 'assets/aistudio/josephine_a1a0850e.jpg');
+  bindImageUpload('testPhotoUpload', 'testPhotoUrl', 'testPhotoPreview', 'assets/aistudio/josephine_a1a0850e.jpg');
+  bindImagePreview('planImageUrl', 'planImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
+  bindImageUpload('planImageUpload', 'planImageUrl', 'planImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
+  bindImagePreview('pubCycleImageUrl', 'pubCycleImgPreview', 'assets/aistudio/partnership_65dac3a6.jpg');
+  bindImageUpload('pubCycleImageUpload', 'pubCycleImageUrl', 'pubCycleImgPreview', 'assets/aistudio/partnership_65dac3a6.jpg');
+  bindImagePreview('updImageUrl', 'updImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
+  bindImageUpload('updImageUpload', 'updImageUrl', 'updImgPreview', 'assets/aistudio/graph_ddbd7244.jpg');
 
   // Set default date for update form
   var dateEl = document.getElementById('updDate');

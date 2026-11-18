@@ -24,6 +24,21 @@
       return 'UGX ' + Math.round(num).toLocaleString('en-US');
     },
 
+    assetUrl: function (url) {
+      var clean = String(url || '').trim();
+      if (!clean) return 'assets/aistudio/logo2_be71428a.jpg';
+      if (clean.indexOf('logobg_263a028d.png') !== -1) {
+        clean = 'assets/aistudio/logo2_be71428a.jpg';
+      }
+      if (clean.indexOf('/assets/') === 0) {
+        return clean.slice(1);
+      }
+      if (window.location && window.location.protocol === 'file:' && clean.indexOf('/') === 0 && clean.indexOf('//') !== 0 && clean.indexOf('/api/') !== 0) {
+        return clean.slice(1);
+      }
+      return clean;
+    },
+
     buildWhatsAppUrl: function (phone, message) {
       var digits = String(phone || this.defaultWhatsapp || '256752259416').replace(/\D/g, '');
       if (digits.startsWith('0') && digits.length >= 10) {
@@ -281,10 +296,7 @@
         el.setAttribute('href', waDirectUrl);
       });
 
-      var logoSrc = s.logo_url || '/assets/aistudio/logo2_be71428a.jpg';
-      if (logoSrc === '/assets/aistudio/logobg_263a028d.png') {
-        logoSrc = '/assets/aistudio/logo2_be71428a.jpg';
-      }
+      var logoSrc = this.assetUrl(s.logo_url || 'assets/aistudio/logo2_be71428a.jpg');
       document.querySelectorAll('.brand-logo').forEach(function (img) {
         img.setAttribute('src', logoSrc);
       });
@@ -292,6 +304,9 @@
 
     init: function () {
       var self = this;
+      document.querySelectorAll('img[src^="/assets/"]').forEach(function (img) {
+        img.setAttribute('src', self.assetUrl(img.getAttribute('src')));
+      });
       this.initNavigation();
       this.initModals();
       this.initCookies();
