@@ -171,22 +171,22 @@
           <p><strong>Data Controller:</strong> SHIMOGY Investment Group Ltd, Kawempe Tula, Kampala, Uganda · Email: shimogygroup@gmail.com · Telephone: +256 752 259 416 / +256 746 788 042.</p>
 
           <h2>1. Data Minimization (Collect Only Needed Data)</h2>
-          <p>We collect strictly the personal information required to verify membership, process investment slot requests, administer Current and Fixed savings accounts, manage rotating savings cycles, assess loan applications, and display accurate balances inside the Client Portal:</p>
+          <p>We collect strictly the personal information required to verify client identity, process investment slot requests, administer Current and Fixed savings accounts, manage rotating savings cycles, assess loan applications, and display accurate balances inside the Client Portal:</p>
           <ul>
-            <li>Identity and contact details: Full legal name, phone number, optional email address, and group membership label.</li>
+            <li>Identity and contact details: Full legal name, phone number, optional email address, and client group label.</li>
             <li>Financial ledger records: Recorded investment plans, savings account balances, loan disbursements, and cycle participation details.</li>
-            <li>Technical session tokens: Secure authentication tokens used solely to keep authorized members and administrators signed in.</li>
+            <li>Technical session tokens: Secure authentication tokens used solely to keep authorized clients and administrators signed in.</li>
           </ul>
-          <p>We do not sell, rent, or trade member data to third-party advertisers, brokers, or marketing networks.</p>
+          <p>We do not sell, rent, or trade client data to third-party advertisers, brokers, or marketing networks.</p>
 
           <h2>2. Children &amp; Youth Age Consent</h2>
-          <p>Individuals must be at least 18 years old to apply independently for investments, savings cycles, or member loans. Savings accounts opened on behalf of minors under 18 require verified parent or legal guardian consent, documented guardian identity on file, and active adult supervision. Any unverified submission involving a minor will be declined and purged promptly.</p>
+          <p>Individuals must be at least 18 years old to apply independently for investments, savings cycles, or client loans. Savings accounts opened on behalf of minors under 18 require verified parent or legal guardian consent, documented guardian identity on file, and active adult supervision. Any unverified submission involving a minor will be declined and purged promptly.</p>
 
           <h2>3. Security &amp; Retention</h2>
-          <p>Account passwords are protected using salted cryptographic hashing (`scrypt`). Financial records are retained only for the duration of active membership and statutory accounting obligations in Uganda.</p>
+          <p>Account passwords are protected using salted cryptographic hashing (`scrypt`). Financial records are retained only for the duration of active client standing and statutory accounting obligations in Uganda.</p>
 
           <h2>4. Your Rights &amp; Data Deletion Option</h2>
-          <p>Every member and visitor has the right to access, correct, or request permanent deletion of personal information held by SHIMOGY Investment Group Ltd, subject to settlement of any active loans or pending cycle obligations.</p>
+          <p>Every client and visitor has the right to access, correct, or request permanent deletion of personal information held by SHIMOGY Investment Group Ltd, subject to settlement of any active loans or pending cycle obligations.</p>
 
           <section id="data-deletion" style="margin-top:28px;padding-top:24px;border-top:2px solid var(--navy-900);">
             <h2 style="border-top:none;padding-top:0;margin-top:0;">Request Account &amp; Personal Data Deletion</h2>
@@ -238,7 +238,7 @@
             <li><a href="investments.html">Investment Plans</a></li>
             <li><a href="cycles.html">Savings Cycles</a></li>
             <li><a href="savings.html">Savings Accounts</a></li>
-            <li><a href="loans.html">Member Loans</a></li>
+            <li><a href="loans.html">Client Loans</a></li>
             <li><a href="updates.html">News &amp; Updates</a></li>
             <li><a href="dashboard.html">Client Portal</a></li>
           </ul>
@@ -281,6 +281,7 @@
   </div>
 
   <script src="js/firebase-bridge.js"></script>
+  <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>
@@ -295,7 +296,7 @@
         var reason = document.getElementById('delReason').value.trim();
         var fb = document.getElementById('deletionFeedback');
 
-        fetch('/api/deletion-requests', {
+        site.apiFetch('/api/deletion-requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ full_name: fullName, phone: phone, email: email, reason: reason })

@@ -17,9 +17,74 @@
     return new Date().toISOString().replace('T', ' ').slice(0, 19);
   }
 
+  function addDaysToISO(baseDateStr, daysToAdd) {
+    var clean = String(baseDateStr || '').slice(0, 10);
+    var base = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T00:00:00Z') : new Date();
+    if (isNaN(base.getTime())) base = new Date();
+    base.setUTCDate(base.getUTCDate() + Number(daysToAdd || 0));
+    return base.toISOString().split('T')[0];
+  }
+
+  function parseDurationDays(durationText, fallbackDays) {
+    var s = String(durationText || '').toLowerCase();
+    var m = s.match(/(\d+)/);
+    var n = m ? Number(m[1]) : 0;
+    if (s.indexOf('year') !== -1) return (n || 1) * 365;
+    if (s.indexOf('month') !== -1) return (n || 1) * 30;
+    if (s.indexOf('bi-week') !== -1) return 14;
+    if (s.indexOf('week') !== -1) return (n || 1) * 7;
+    if (s.indexOf('daily') !== -1) return 1;
+    if (n > 0) return n;
+    return fallbackDays || 30;
+  }
+
+  function computeReturnsDate(startDate, duration, explicitDate) {
+    var given = String(explicitDate || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+    return addDaysToISO(startDate || todayISO(), parseDurationDays(duration, 60));
+  }
+
+  function computeLoanReturnDate(requestDate, duration, explicitDate) {
+    var given = String(explicitDate || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+    return addDaysToISO(requestDate || todayISO(), parseDurationDays(duration, 30));
+  }
+
+  function normalizeSavingsStatus(accountType, requestedStatus) {
+    var raw = String(requestedStatus || '').trim().toLowerCase();
+    if (raw === 'suspended' || raw === 'closed') return requestedStatus;
+    if (String(accountType || '').toLowerCase().indexOf('fixed') !== -1) return 'Locked';
+    return 'Available';
+  }
+
+  function sanitizeUrl(url, fallback) {
+    var clean = String(url || '').trim();
+    if (!clean) return fallback || '';
+    var lower = clean.toLowerCase().replace(/[\u0000-\u001F\u007F\s]+/g, '');
+    if (
+      lower.indexOf('javascript:') === 0 ||
+      lower.indexOf('vbscript:') === 0 ||
+      lower.indexOf('data:text/') === 0 ||
+      lower.indexOf('data:application/') === 0
+    ) {
+      return fallback || '';
+    }
+    if (
+      clean.indexOf('/') === 0 ||
+      clean.indexOf('assets/') === 0 ||
+      clean.indexOf('https://') === 0 ||
+      clean.indexOf('http://') === 0 ||
+      clean.indexOf('data:image/') === 0 ||
+      /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(clean)
+    ) {
+      return clean;
+    }
+    return fallback || '';
+  }
+
   function normalizePhone(phone) {
     var digits = String(phone || '').replace(/\D/g, '');
-    if (digits.startsWith('256') && digits.length >= 12) {
+    if (digits.indexOf('256') === 0 && digits.length >= 12) {
       return '0' + digits.slice(3);
     }
     return digits || String(phone || '').trim();
@@ -46,14 +111,14 @@
         logo_url: 'assets/aistudio/logo2_be71428a.jpg',
         about_mission: 'To offer smart and profitable investment opportunities with simplified financial solutions to all our local and international clients.',
         about_vision: 'To lead a positive financial transformation through smart investments and simplified financial solutions across the globe.',
-        about_story: 'SHIMOGY Investment Group Ltd is a Kampala-based investment and community savings organization operating from Kawempe Tula. Founded in 2023, we structure local business ventures, savings accounts, rotating community cycles, and member financing with transparent reporting.',
+        about_story: 'SHIMOGY Investment Group Ltd is a Kampala-based investment and community savings organization operating from Kawempe Tula. Founded in 2023, we structure local business ventures, savings accounts, rotating community cycles, and client financing with transparent reporting.',
         stats_members: '200+',
         stats_capital: 'UGX 50M+',
         stats_years: 'Since 2023',
         stats_hours: 'Mon - Sat, 8AM - 6PM',
         risk_disclosure: 'All investments carry operational and market risk. Projected returns are estimates based on business cycle performance and are not unconditionally guaranteed.',
         age_consent_policy: 'Account holders must be at least 18 years old. Savings accounts for minors under 18 require verified parent or legal guardian consent and supervision.',
-        quick_updates_ticker: 'Welcome to SHIMOGY Investment Group Ltd — Explore active community savings cycles, structured investment plans, and member accounts in Kawempe Tula, Kampala. Contact Operations via WhatsApp for daily guidance.'
+        quick_updates_ticker: 'Welcome to SHIMOGY Investment Group Ltd — Explore active community savings cycles, structured investment plans, and client accounts in Kawempe Tula, Kampala. Contact Operations via WhatsApp for daily guidance.'
       },
       admins: [
         { id: 1, email: 'admin@shimogy.com', name: 'SHIMOGY Administrator', pass: 'shimogy123' },
@@ -78,8 +143,8 @@
           id: 2,
           badge_text: 'Transparent Portfolio Tracking',
           title: 'Real-Time Visibility Into Every Shilling You Invest',
-          subtitle: 'Monitor your active plans, fixed savings accounts, cycle schedules, and loan balances from your secure member portal at any time.',
-          cta_text: 'Open Member Portal',
+          subtitle: 'Monitor your active plans, fixed savings accounts, cycle schedules, and loan balances from your secure client portal at any time.',
+          cta_text: 'Open Client Portal',
           cta_link: 'dashboard.html',
           image_url: 'assets/aistudio/graph_ddbd7244.jpg',
           image_alt: 'Financial growth chart and portfolio analytics presentation',
@@ -118,7 +183,7 @@
           location: 'Mbarara, Uganda',
           quote: 'I save with Shimogy Investment Group from Mbarara. The structured savings cycles helped me build consistent saving habits.',
           photo_url: 'assets/aistudio/Namala_406c7774.jpg',
-          photo_alt: 'Portrait of SHIMOGY member Namala Florence at a local retail outlet',
+          photo_alt: 'Portrait of SHIMOGY client Namala Florence at a local retail outlet',
           sort_order: 2,
           is_active: 1
         },
@@ -127,7 +192,7 @@
           client_name: 'Mbabali Patrick',
           role: 'Verified Investor',
           location: 'Kawempe, Kampala',
-          quote: 'Transparency is what sets SHIMOGY apart. My member dashboard reflects every contribution clearly, and I have reinvested across multiple cycles.',
+          quote: 'Transparency is what sets SHIMOGY apart. My client dashboard reflects every contribution clearly, and I have reinvested across multiple cycles.',
           photo_url: 'assets/aistudio/patrick_ebf0c1be.jpg',
           photo_alt: 'Portrait of SHIMOGY investor Mbabali Patrick',
           sort_order: 3,
@@ -242,7 +307,7 @@
           name: 'Group 2 - Weekly Builders',
           contribution: 5000,
           payout_duration: 'Weekly',
-          description: 'Weekly group savings cycle helping members accumulate capital for personal projects.',
+          description: 'Weekly group savings cycle helping clients accumulate capital for personal projects.',
           image_url: 'assets/aistudio/graph_ddbd7244.jpg',
           image_alt: 'Weekly Builders financial planning and savings progress chart',
           status: 'Active'
@@ -271,12 +336,12 @@
       updates: [
         {
           id: 1,
-          title: 'New Member Portal & Transparent Portfolio Tracking',
+          title: 'New Client Portal & Transparent Portfolio Tracking',
           category: 'news',
-          excerpt: 'Members can now view active investments, fixed accounts, loans, and cycle schedules in real time.',
+          excerpt: 'Clients can now view active investments, fixed accounts, loans, and cycle schedules in real time.',
           detail: 'Our upgraded portal connects directly to our central operations database, ensuring every newly recorded investment plan, Fixed Account deposit, loan approval, and cycle payout schedule appears promptly in your client dashboard.',
           image_url: 'assets/aistudio/graph_ddbd7244.jpg',
-          image_alt: 'Portfolio growth and digital member tracking dashboard overview',
+          image_alt: 'Portfolio growth and digital client tracking dashboard overview',
           published_date: '2026-11-10',
           status: 'published'
         },
@@ -285,9 +350,9 @@
           title: 'Fixed Account Annual Interest & Loan Equivalency',
           category: 'tip',
           excerpt: 'Earn 7% annual interest on Fixed Accounts and qualify for up to 85% fixed equivalency loans.',
-          detail: 'Members holding an active Fixed Account benefit from 7% annual interest paid at the end of the fixed duration with zero monthly fees, plus eligibility for a member loan up to 85% of their fixed deposit balance.',
+          detail: 'Clients holding an active Fixed Account benefit from 7% annual interest paid at the end of the fixed duration with zero monthly fees, plus eligibility for a client loan up to 85% of their fixed deposit balance.',
           image_url: 'assets/aistudio/partnership_65dac3a6.jpg',
-          image_alt: 'Fixed account savings and member financing partnership',
+          image_alt: 'Fixed account savings and client financing partnership',
           published_date: '2026-11-02',
           status: 'published'
         },
@@ -296,7 +361,7 @@
           title: 'Poultry & Hospitality Cycles Open for Q4',
           category: 'event',
           excerpt: 'Operations Team has verified new slots across Poultry Farm and Restaurant Enterprise cycles.',
-          detail: 'Our Kawempe operations team conducts physical site checks before opening new investment slots. Interested members can submit a slot request online and finalize verification directly with our office.',
+          detail: 'Our Kawempe operations team conducts physical site checks before opening new investment slots. Interested clients can submit a slot request online and finalize verification directly with our office.',
           image_url: 'assets/aistudio/poultry_4e5861c3.jpg',
           image_alt: 'Poultry farm operation monitored by SHIMOGY operations team',
           published_date: '2026-10-24',
@@ -339,6 +404,7 @@
           amount: 500000,
           expected_return: 700000,
           duration: '60 Days',
+          returns_date: addDaysToISO(todayISO(), 45),
           status: 'active',
           created_at: '2026-10-15 10:00:00'
         }
@@ -352,7 +418,7 @@
           account_type: 'Fixed Account',
           balance: 250000,
           open_date: '2026-09-20',
-          status: 'active',
+          status: 'Locked',
           created_at: '2026-09-20 09:00:00'
         }
       ],
@@ -367,8 +433,9 @@
           duration: '30 days',
           interest_rate: '10%',
           status: 'active',
-          request_date: '2026-10-28',
-          created_at: '2026-10-28 14:00:00'
+          request_date: todayISO(),
+          return_date: addDaysToISO(todayISO(), 21),
+          created_at: nowISO()
         }
       ],
       memberCycles: [
@@ -381,14 +448,41 @@
           contribution: 3000,
           payout_duration: 'Weekly',
           number_of_members: 8,
-          join_date: '2026-09-01',
+          cycle_number: 4,
+          cycle_type: 'public',
+          join_date: addDaysToISO(todayISO(), -14),
           status: 'active',
-          created_at: '2026-09-01 08:30:00'
+          created_at: nowISO()
         }
       ],
       requests: [],
       deletionRequests: []
     };
+  }
+
+  function normalizeLoadedDb(db) {
+    if (Array.isArray(db.investments)) {
+      db.investments.forEach(function (inv) {
+        if (!inv.returns_date) inv.returns_date = computeReturnsDate(inv.created_at || todayISO(), inv.duration || '60 Days');
+      });
+    }
+    if (Array.isArray(db.savings)) {
+      db.savings.forEach(function (sav) {
+        sav.status = normalizeSavingsStatus(sav.account_type, sav.status);
+      });
+    }
+    if (Array.isArray(db.loans)) {
+      db.loans.forEach(function (ln) {
+        if (!ln.return_date) ln.return_date = computeLoanReturnDate(ln.request_date || todayISO(), ln.duration || '30 days');
+      });
+    }
+    if (Array.isArray(db.memberCycles)) {
+      db.memberCycles.forEach(function (cy) {
+        if (!cy.cycle_number) cy.cycle_number = 1;
+        if (!cy.cycle_type) cy.cycle_type = 'public';
+      });
+    }
+    return db;
   }
 
   function loadDb() {
@@ -402,7 +496,7 @@
       try {
         var parsed = JSON.parse(raw);
         if (parsed && parsed.settings && Array.isArray(parsed.plans)) {
-          return parsed;
+          return normalizeLoadedDb(parsed);
         }
       } catch (_err) {}
     }
@@ -471,7 +565,7 @@
     var db = loadDb();
 
     if (pathOnly === '/api/health') {
-      return jsonResp(200, { status: 'ok', mode: 'standalone' });
+      return jsonResp(200, { status: 'ok', mode: 'standalone', supabaseUrl: 'https://ihgfsvkcpgxklotjmokl.supabase.co' });
     }
 
     if (pathOnly === '/api/site-data' && method === 'GET') {
@@ -556,7 +650,7 @@
       var mSess = getSession(db, headers);
       if (!mSess || mSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
       var mRow = db.members.find(function (m) { return m.id === mSess.user_id; });
-      if (!mRow) return jsonResp(404, { error: 'Member account not found.' });
+      if (!mRow) return jsonResp(404, { error: 'Client account not found.' });
       return jsonResp(200, {
         member: Object.assign(sanitizeMember(mRow), {
           investments: db.investments.filter(function (i) { return i.member_id === mRow.id || i.member_phone === mRow.phone; }),
@@ -565,6 +659,26 @@
           cycles: db.memberCycles.filter(function (c) { return c.member_id === mRow.id || c.member_phone === mRow.phone; })
         })
       });
+    }
+
+    var mCycleAct = pathOnly.match(/^\/api\/member\/cycles\/(\d+)\/action$/);
+    if (mCycleAct && method === 'POST') {
+      var cSess = getSession(db, headers);
+      if (!cSess || cSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
+      var cMem = db.members.find(function (m) { return m.id === cSess.user_id; });
+      var targetCycId = Number(mCycleAct[1]);
+      var cycRow = db.memberCycles.find(function (c) { return c.id === targetCycId; });
+      if (!cycRow || !cMem) return jsonResp(404, { error: 'Cycle record not found.' });
+      if (cycRow.member_id !== cMem.id && normalizePhone(cycRow.member_phone) !== normalizePhone(cMem.phone)) {
+        return jsonResp(403, { error: 'You are not authorized to modify this cycle.' });
+      }
+      var actName = String(body.action || '').toLowerCase();
+      if (actName !== 'exit' && actName !== 'stop') {
+        return jsonResp(400, { error: 'Valid action (exit or stop) is required.' });
+      }
+      cycRow.status = actName === 'stop' ? 'stopped' : 'exited';
+      saveDb(db);
+      return jsonResp(200, { success: true, status: cycRow.status });
     }
 
     if (pathOnly === '/api/member/change-password' && method === 'POST') {
@@ -618,8 +732,20 @@
       return jsonResp(200, { success: true });
     }
 
+    if (pathOnly === '/api/admin/export-supabase' && method === 'GET') {
+      var esc = function (v) { return "'" + String(v === undefined || v === null ? '' : v).replace(/'/g, "''") + "'"; };
+      var sqlOut = ['-- SHIMOGY Offline/Browser Supabase SQL Export', 'BEGIN;'];
+      Object.keys(db.settings || {}).forEach(function (k) {
+        sqlOut.push('INSERT INTO public.site_settings (key, value) VALUES (' + esc(k) + ', ' + esc(db.settings[k]) + ') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;');
+      });
+      sqlOut.push('COMMIT;');
+      return jsonResp(200, { mode: 'standalone', supabaseUrl: 'https://ihgfsvkcpgxklotjmokl.supabase.co', sql: sqlOut.join('\n') });
+    }
+
     if (pathOnly === '/api/admin/overview' && method === 'GET') {
       return jsonResp(200, {
+        databaseMode: 'standalone',
+        supabaseUrl: 'https://ihgfsvkcpgxklotjmokl.supabase.co',
         settings: db.settings,
         members: db.members.map(sanitizeMember),
         investments: db.investments,
@@ -817,12 +943,12 @@
       return jsonResp(200, { success: true });
     }
 
-    // Members
+    // Clients
     var mFind = pathOnly.match(/^\/api\/admin\/member\/(.+)$/);
     if (mFind && method === 'GET') {
       var lookup = normalizePhone(decodeURIComponent(mFind[1]));
       var fm = db.members.find(function (x) { return x.phone === lookup || x.phone === decodeURIComponent(mFind[1]); });
-      if (!fm) return jsonResp(404, { error: 'Member not found.' });
+      if (!fm) return jsonResp(404, { error: 'Client not found.' });
       return jsonResp(200, {
         member: Object.assign(sanitizeMember(fm), {
           investments: db.investments.filter(function (i) { return i.member_id === fm.id || i.member_phone === fm.phone; }),
@@ -836,7 +962,7 @@
     if (pathOnly === '/api/admin/members' && method === 'POST') {
       var mp = normalizePhone(body.phone || '');
       if (db.members.some(function (x) { return x.phone === mp; })) {
-        return jsonResp(409, { error: 'A member with that phone number already exists.' });
+        return jsonResp(409, { error: 'A client with that phone number already exists.' });
       }
       var newMid = nextId(db);
       var memObj = {
@@ -845,23 +971,60 @@
         phone: mp,
         email: String(body.email || '').trim(),
         group_name: String(body.group_name || '').trim(),
-        balance: Number(body.balance || 0),
-        total_invested: Number(body.total_invested || 0),
+        balance: Math.max(0, Number(body.balance || 0)),
+        total_invested: Math.max(0, Number(body.total_invested || 0)),
         status: 'active',
         pass: String(body.password || '1234')
       };
       db.members.unshift(memObj);
       if (body.investment && body.investment.plan_name) {
-        db.investments.unshift(Object.assign({ id: nextId(db), member_id: newMid, member_phone: mp, member_name: memObj.name, status: 'active', created_at: nowISO() }, body.investment));
+        var iDur = String(body.investment.duration || '60 Days');
+        db.investments.unshift(Object.assign({
+          id: nextId(db),
+          member_id: newMid,
+          member_phone: mp,
+          member_name: memObj.name,
+          status: 'active',
+          created_at: nowISO(),
+          returns_date: computeReturnsDate(todayISO(), iDur, body.investment.returns_date)
+        }, body.investment));
       }
       if (body.savings && body.savings.account_type) {
-        db.savings.unshift(Object.assign({ id: nextId(db), member_id: newMid, member_phone: mp, member_name: memObj.name, open_date: todayISO(), status: 'active', created_at: nowISO() }, body.savings));
+        var sType = String(body.savings.account_type);
+        db.savings.unshift(Object.assign({
+          id: nextId(db),
+          member_id: newMid,
+          member_phone: mp,
+          member_name: memObj.name,
+          open_date: todayISO(),
+          created_at: nowISO()
+        }, body.savings, { status: normalizeSavingsStatus(sType, body.savings.status) }));
       }
       if (body.loan && body.loan.amount) {
-        db.loans.unshift(Object.assign({ id: nextId(db), member_id: newMid, member_phone: mp, member_name: memObj.name, request_date: todayISO(), created_at: nowISO() }, body.loan));
+        var lDur = String(body.loan.duration || '30 days');
+        db.loans.unshift(Object.assign({
+          id: nextId(db),
+          member_id: newMid,
+          member_phone: mp,
+          member_name: memObj.name,
+          request_date: todayISO(),
+          return_date: computeLoanReturnDate(todayISO(), lDur, body.loan.return_date),
+          created_at: nowISO()
+        }, body.loan));
       }
       if (body.cycle && body.cycle.cycle_name) {
-        db.memberCycles.unshift(Object.assign({ id: nextId(db), member_id: newMid, member_phone: mp, member_name: memObj.name, join_date: todayISO(), status: 'active', created_at: nowISO() }, body.cycle));
+        var totalCli = Math.max(2, Number(body.cycle.number_of_members || 10));
+        db.memberCycles.unshift(Object.assign({
+          id: nextId(db),
+          member_id: newMid,
+          member_phone: mp,
+          member_name: memObj.name,
+          join_date: todayISO(),
+          cycle_number: Math.min(totalCli, Math.max(1, Number(body.cycle.cycle_number || 1))),
+          cycle_type: String(body.cycle.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
+          status: 'active',
+          created_at: nowISO()
+        }, body.cycle));
       }
       saveDb(db);
       return jsonResp(201, { id: newMid });
@@ -873,14 +1036,18 @@
       if (method === 'PUT') {
         var existingMem = db.members.find(function (x) { return x.id === memId; });
         if (existingMem) {
-          existingMem.name = String(body.name || existingMem.name);
+          existingMem.name = String(body.name || existingMem.name).trim();
           existingMem.phone = normalizePhone(body.phone || existingMem.phone);
-          existingMem.email = String(body.email || '');
-          existingMem.group_name = String(body.group_name || '');
-          existingMem.balance = Number(body.balance || 0);
-          existingMem.total_invested = Number(body.total_invested || 0);
-          existingMem.status = String(body.status || 'active');
+          existingMem.email = String(body.email ?? existingMem.email ?? '');
+          existingMem.group_name = String(body.group_name ?? existingMem.group_name ?? '');
+          existingMem.balance = Math.max(0, Number(body.balance ?? existingMem.balance ?? 0));
+          existingMem.total_invested = Math.max(0, Number(body.total_invested ?? existingMem.total_invested ?? 0));
+          existingMem.status = String(body.status || existingMem.status || 'active');
           if (body.password) existingMem.pass = String(body.password);
+          db.investments.forEach(function (i) { if (i.member_id === memId) { i.member_phone = existingMem.phone; i.member_name = existingMem.name; } });
+          db.savings.forEach(function (s) { if (s.member_id === memId) { s.member_phone = existingMem.phone; s.member_name = existingMem.name; } });
+          db.loans.forEach(function (l) { if (l.member_id === memId) { l.member_phone = existingMem.phone; l.member_name = existingMem.name; } });
+          db.memberCycles.forEach(function (c) { if (c.member_id === memId) { c.member_phone = existingMem.phone; c.member_name = existingMem.name; } });
           saveDb(db);
         }
         return jsonResp(200, { success: true });
@@ -899,56 +1066,112 @@
     if (pathOnly === '/api/admin/investments' && method === 'POST') {
       var ip = normalizePhone(body.member_phone || '');
       var im = db.members.find(function (x) { return x.phone === ip; });
+      var invDur = String(body.duration || '60 Days');
       db.investments.unshift({
         id: nextId(db),
         member_id: im ? im.id : null,
         member_phone: ip,
-        member_name: body.member_name || (im ? im.name : 'Member'),
+        member_name: body.member_name || (im ? im.name : 'Client'),
         plan_name: String(body.plan_name || ''),
-        amount: Number(body.amount || 0),
-        expected_return: Number(body.expected_return || 0),
-        duration: String(body.duration || '30 Days'),
-        status: 'active',
+        amount: Math.max(0, Number(body.amount || 0)),
+        expected_return: Math.max(0, Number(body.expected_return || 0)),
+        duration: invDur,
+        returns_date: computeReturnsDate(todayISO(), invDur, body.returns_date),
+        status: String(body.status || 'active'),
         created_at: nowISO()
       });
-      if (im) im.total_invested = Number(im.total_invested || 0) + Number(body.amount || 0);
+      if (im) im.total_invested = Number(im.total_invested || 0) + Math.max(0, Number(body.amount || 0));
       saveDb(db);
       return jsonResp(201, { success: true });
+    }
+
+    var mInv = pathOnly.match(/^\/api\/admin\/investments\/(\d+)$/);
+    if (mInv) {
+      var invId = Number(mInv[1]);
+      if (method === 'PUT') {
+        var invItem = db.investments.find(function (x) { return x.id === invId; });
+        if (invItem) {
+          var prevAmt = Number(invItem.amount || 0);
+          var nextAmt = Math.max(0, Number(body.amount !== undefined ? body.amount : invItem.amount));
+          invItem.plan_name = String(body.plan_name || invItem.plan_name);
+          invItem.amount = nextAmt;
+          invItem.expected_return = Math.max(0, Number(body.expected_return !== undefined ? body.expected_return : invItem.expected_return));
+          invItem.duration = String(body.duration || invItem.duration || '60 Days');
+          invItem.returns_date = computeReturnsDate(invItem.created_at || todayISO(), invItem.duration, body.returns_date || invItem.returns_date);
+          invItem.status = String(body.status || invItem.status || 'active');
+          if (invItem.member_id) {
+            var ownerM = db.members.find(function (x) { return x.id === invItem.member_id; });
+            if (ownerM) ownerM.total_invested = Math.max(0, Number(ownerM.total_invested || 0) + (nextAmt - prevAmt));
+          }
+          saveDb(db);
+        }
+        return jsonResp(200, { success: true });
+      }
+      if (method === 'DELETE') {
+        db.investments = db.investments.filter(function (x) { return x.id !== invId; });
+        saveDb(db);
+        return jsonResp(200, { success: true });
+      }
     }
 
     if (pathOnly === '/api/admin/savings' && method === 'POST') {
       var sp = normalizePhone(body.member_phone || '');
       var sm = db.members.find(function (x) { return x.phone === sp; });
+      var acctType = String(body.account_type || 'Current Account');
+      var savBal = Math.max(0, Number(body.balance || 0));
       db.savings.unshift({
         id: nextId(db),
         member_id: sm ? sm.id : null,
         member_phone: sp,
-        member_name: body.member_name || (sm ? sm.name : 'Member'),
-        account_type: String(body.account_type || 'Current Account'),
-        balance: Number(body.balance || 0),
+        member_name: body.member_name || (sm ? sm.name : 'Client'),
+        account_type: acctType,
+        balance: savBal,
         open_date: todayISO(),
-        status: 'active',
+        status: normalizeSavingsStatus(acctType, body.status),
         created_at: nowISO()
       });
-      if (sm) sm.balance = Number(sm.balance || 0) + Number(body.balance || 0);
+      if (sm) sm.balance = Number(sm.balance || 0) + savBal;
       saveDb(db);
       return jsonResp(201, { success: true });
+    }
+
+    var mSav = pathOnly.match(/^\/api\/admin\/savings\/(\d+)$/);
+    if (mSav) {
+      var sId = Number(mSav[1]);
+      if (method === 'PUT') {
+        var savItem = db.savings.find(function (x) { return x.id === sId; });
+        if (savItem) {
+          savItem.account_type = String(body.account_type || savItem.account_type);
+          savItem.balance = Math.max(0, Number(body.balance !== undefined ? body.balance : savItem.balance));
+          savItem.status = normalizeSavingsStatus(savItem.account_type, body.status !== undefined ? body.status : savItem.status);
+          saveDb(db);
+        }
+        return jsonResp(200, { success: true });
+      }
+      if (method === 'DELETE') {
+        db.savings = db.savings.filter(function (x) { return x.id !== sId; });
+        saveDb(db);
+        return jsonResp(200, { success: true });
+      }
     }
 
     if (pathOnly === '/api/admin/loans' && method === 'POST') {
       var lp = normalizePhone(body.member_phone || '');
       var lm = db.members.find(function (x) { return x.phone === lp; });
+      var lDuration = String(body.duration || '30 days');
+      var reqDate = String(body.request_date || todayISO());
       db.loans.unshift({
         id: nextId(db),
         member_id: lm ? lm.id : null,
         member_phone: lp,
-        member_name: body.member_name || (lm ? lm.name : 'Member'),
-        amount: Number(body.amount || 0),
+        member_name: body.member_name || (lm ? lm.name : 'Client'),
+        amount: Math.max(0, Number(body.amount || 0)),
         purpose: String(body.purpose || ''),
-        duration: String(body.duration || '30 days'),
+        duration: lDuration,
         interest_rate: String(body.interest_rate || '10%'),
         status: String(body.status || 'active'),
-        request_date: todayISO(),
+        request_date: reqDate,
+        return_date: computeLoanReturnDate(reqDate, lDuration, body.return_date),
         created_at: nowISO()
       });
       saveDb(db);
@@ -960,7 +1183,14 @@
       var lId = Number(mLoan[1]);
       if (method === 'PUT') {
         var lItem = db.loans.find(function (x) { return x.id === lId; });
-        if (lItem) lItem.status = String(body.status || 'paid');
+        if (lItem) {
+          if (body.amount !== undefined) lItem.amount = Math.max(0, Number(body.amount));
+          if (body.purpose !== undefined) lItem.purpose = String(body.purpose);
+          if (body.duration !== undefined) lItem.duration = String(body.duration);
+          if (body.interest_rate !== undefined) lItem.interest_rate = String(body.interest_rate);
+          if (body.status !== undefined) lItem.status = String(body.status);
+          lItem.return_date = computeLoanReturnDate(lItem.request_date || todayISO(), lItem.duration || '30 days', body.return_date || lItem.return_date);
+        }
         saveDb(db);
         return jsonResp(200, { success: true });
       }
@@ -974,21 +1204,49 @@
     if (pathOnly === '/api/admin/member-cycles' && method === 'POST') {
       var cp = normalizePhone(body.member_phone || '');
       var cm = db.members.find(function (x) { return x.phone === cp; });
+      var totM = Math.max(2, Number(body.number_of_members || 10));
       db.memberCycles.unshift({
         id: nextId(db),
         member_id: cm ? cm.id : null,
         member_phone: cp,
-        member_name: body.member_name || (cm ? cm.name : 'Member'),
+        member_name: body.member_name || (cm ? cm.name : 'Client'),
         cycle_name: String(body.cycle_name || ''),
-        contribution: Number(body.contribution || 0),
+        contribution: Math.max(0, Number(body.contribution || 0)),
         payout_duration: String(body.payout_duration || 'Weekly'),
-        number_of_members: Number(body.number_of_members || 10),
-        join_date: todayISO(),
-        status: 'active',
+        number_of_members: totM,
+        cycle_number: Math.min(totM, Math.max(1, Number(body.cycle_number || 1))),
+        cycle_type: String(body.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
+        join_date: String(body.join_date || todayISO()),
+        status: String(body.status || 'active'),
         created_at: nowISO()
       });
       saveDb(db);
       return jsonResp(201, { success: true });
+    }
+
+    var mCyc = pathOnly.match(/^\/api\/admin\/member-cycles\/(\d+)$/);
+    if (mCyc) {
+      var cycId = Number(mCyc[1]);
+      if (method === 'PUT') {
+        var cycItem = db.memberCycles.find(function (x) { return x.id === cycId; });
+        if (cycItem) {
+          var nextTot = Math.max(2, Number(body.number_of_members !== undefined ? body.number_of_members : (cycItem.number_of_members || 10)));
+          cycItem.cycle_name = String(body.cycle_name || cycItem.cycle_name);
+          cycItem.contribution = Math.max(0, Number(body.contribution !== undefined ? body.contribution : cycItem.contribution));
+          cycItem.payout_duration = String(body.payout_duration || cycItem.payout_duration);
+          cycItem.number_of_members = nextTot;
+          cycItem.cycle_number = Math.min(nextTot, Math.max(1, Number(body.cycle_number !== undefined ? body.cycle_number : (cycItem.cycle_number || 1))));
+          cycItem.cycle_type = String(body.cycle_type || cycItem.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public';
+          cycItem.status = String(body.status || cycItem.status || 'active');
+          saveDb(db);
+        }
+        return jsonResp(200, { success: true });
+      }
+      if (method === 'DELETE') {
+        db.memberCycles = db.memberCycles.filter(function (x) { return x.id !== cycId; });
+        saveDb(db);
+        return jsonResp(200, { success: true });
+      }
     }
 
     var mReq = pathOnly.match(/^\/api\/admin\/requests\/(\d+)$/);
@@ -1055,150 +1313,170 @@
     return body;
   }
 
-  // Transparent fetch adapter for /api/* calls (Cloud Firestore -> Express SQLite -> Offline LocalStorage)
-  if (typeof window.fetch === 'function') {
-    var nativeFetch = window.fetch.bind(window);
+  // Transparent fetch adapter for /api/* calls
+  // Priority over HTTP(S): Live Express + Supabase PostgreSQL (/api/*) -> Static Supabase REST -> Cloud Firestore -> LocalStorage
+  var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+  try {
+    if (nativeFetch) window.ShimogyNativeFetch = nativeFetch;
+  } catch (_e) {}
 
-    var fallbackHttpOrLocal = function (input, init, url) {
-      if (window.location.protocol === 'file:') {
+  function fallbackStaticServices(input, init, url, pathOnly, method, body, token) {
+    var sb = window.ShimogySupabase;
+    var cloud = window.ShimogyCloud;
+
+    // 1. Static host Supabase REST bridge (Cloudflare Pages / public catalog + request submissions)
+    if (sb && typeof sb.isConfigured === 'function' && sb.isConfigured() && sb.isSchemaReady()) {
+      if (pathOnly === '/api/site-data' && method === 'GET') {
+        return sb.getPublicSiteData().then(function (sbData) {
+          if (sbData) return jsonResp(200, sbData);
+          return tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud);
+        });
+      }
+      if (pathOnly === '/api/requests' && method === 'POST') {
+        if (!body.request_type || !body.applicant_name || !body.applicant_phone) {
+          return Promise.resolve(jsonResp(400, { error: 'Full name, phone number, and request type are required.' }));
+        }
+        if (!body.age_confirmed) {
+          return Promise.resolve(jsonResp(400, { error: 'Age verification or parent/guardian consent confirmation is required.' }));
+        }
+        return sb.createServiceRequest(body).then(function (sbRes) {
+          if (sbRes) return jsonResp(201, sbRes);
+          return tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud);
+        });
+      }
+      if (pathOnly === '/api/deletion-requests' && method === 'POST') {
+        if (!body.full_name || !body.phone) {
+          return Promise.resolve(jsonResp(400, { error: 'Full name and registered phone number are required.' }));
+        }
+        return sb.createDeletionRequest(body).then(function (sbDelRes) {
+          if (sbDelRes) return jsonResp(201, sbDelRes);
+          return tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud);
+        });
+      }
+    }
+
+    return tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud);
+  }
+
+  function tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud) {
+    if (cloud && typeof cloud.isEnabled === 'function' && cloud.isEnabled()) {
+      if (pathOnly === '/api/site-data' && method === 'GET') {
+        return cloud.getPublicSiteData()
+          .then(function (cloudData) { return cloudData ? jsonResp(200, cloudData) : handleStandaloneApi(url, init); })
+          .catch(function () { return handleStandaloneApi(url, init); });
+      }
+      if (pathOnly === '/api/requests' && method === 'POST') {
+        if (!body.request_type || !body.applicant_name || !body.applicant_phone || !body.age_confirmed) {
+          return Promise.resolve(handleStandaloneApi(url, init));
+        }
+        return cloud.createServiceRequest(body)
+          .then(function (res) { return jsonResp(201, res); })
+          .catch(function () { return handleStandaloneApi(url, init); });
+      }
+      if (pathOnly === '/api/deletion-requests' && method === 'POST') {
+        if (!body.full_name || !body.phone) return Promise.resolve(handleStandaloneApi(url, init));
+        return cloud.createDeletionRequest(body)
+          .then(function (res) { return jsonResp(201, res); })
+          .catch(function () { return handleStandaloneApi(url, init); });
+      }
+      if (pathOnly === '/api/member/login' && method === 'POST') {
+        return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
+          .then(function (cloudRes) { return cloudRes ? jsonResp(200, cloudRes) : handleStandaloneApi(url, init); })
+          .catch(function () { return handleStandaloneApi(url, init); });
+      }
+      if (pathOnly === '/api/member/me' && method === 'GET' && (token.indexOf('cloud_portal_') === 0 || token.indexOf('cloud_mem_uid_') === 0)) {
+        var waitReady = token.indexOf('cloud_mem_uid_') === 0 && typeof cloud.waitForAuthReady === 'function'
+          ? cloud.waitForAuthReady()
+          : Promise.resolve();
+        return waitReady
+          .then(function () { return cloud.fetchMemberSessionFromCloud(token); })
+          .then(function (res) { return res ? jsonResp(200, res) : jsonResp(401, { error: 'Session expired. Please sign in again.' }); })
+          .catch(function () { return jsonResp(401, { error: 'Unable to load cloud portfolio.' }); });
+      }
+      if (pathOnly === '/api/logout' && method === 'POST') {
+        var shouldCloudOut = token.indexOf('cloud_') === 0 || (typeof cloud.isAdminSignedIn === 'function' && cloud.isAdminSignedIn());
+        if (shouldCloudOut && typeof cloud.signOutCloud === 'function') cloud.signOutCloud().catch(function () {});
         return Promise.resolve(handleStandaloneApi(url, init));
       }
+      if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login') {
+        var isCloudToken = token.indexOf('cloud_adm_') === 0;
+        var authWait = typeof cloud.waitForAuthReady === 'function' ? cloud.waitForAuthReady() : Promise.resolve();
+        return authWait.then(function () {
+          if (cloud.isAdminSignedIn()) {
+            return cloud.handleAdminApi(pathOnly, method, body).then(function (cloudResp) {
+              return cloudResp ? jsonResp(cloudResp.status, cloudResp.data) : handleStandaloneApi(url, init);
+            });
+          }
+          if (isCloudToken) {
+            return jsonResp(401, { error: 'Cloud administrator session expired. Please sign in with Google again.' });
+          }
+          return handleStandaloneApi(url, init);
+        });
+      }
+    }
+    return Promise.resolve(handleStandaloneApi(url, init));
+  }
+
+  var shimogyFetch = function (input, init) {
+    var url = typeof input === 'string' ? input : (input && input.url) || '';
+    var isApi = url.indexOf('/api/') === 0 && url.indexOf('/api/media/') !== 0;
+
+    if (!isApi) {
+      if (!nativeFetch) {
+        return Promise.reject(new Error('Network fetch is unavailable in this environment.'));
+      }
+      return nativeFetch(input, init);
+    }
+
+    var pathOnly = String(url).split('?')[0];
+    var method = String((init && init.method) || 'GET').toUpperCase();
+    var body = parseJsonBody(init);
+    var token = getBearerToken(init && init.headers);
+
+    // Cloud-authenticated sessions route explicitly through Cloud Firestore
+    if (token.indexOf('cloud_') === 0 && window.ShimogyCloud) {
+      return tryCloudOrLocal(url, init, pathOnly, method, body, token, window.ShimogyCloud);
+    }
+
+    // Over HTTP/HTTPS, prefer live Express + Supabase PostgreSQL backend when reachable
+    if (nativeFetch && window.location.protocol !== 'file:') {
       return nativeFetch(input, init)
         .then(function (res) {
           var ct = (res.headers && res.headers.get('content-type')) || '';
-          var isJson = ct.indexOf('application/json') !== -1;
-          if (!isJson || res.status === 404 || res.status === 405 || res.status >= 502) {
-            return handleStandaloneApi(url, init);
+          var isJson = ct.indexOf('application/json') !== -1 || ct.indexOf('application/sql') !== -1;
+          if (!isJson || res.status === 405 || res.status >= 502) {
+            return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
           }
           return res;
         })
         .catch(function () {
-          return handleStandaloneApi(url, init);
+          return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
         });
-    };
+    }
 
-    window.fetch = function (input, init) {
-      var url = typeof input === 'string' ? input : (input && input.url) || '';
-      var isApi = url.indexOf('/api/') === 0 && url.indexOf('/api/media/') !== 0;
+    return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
+  };
 
-      if (!isApi) {
-        return nativeFetch(input, init);
-      }
+  try {
+    window.shimogyFetch = shimogyFetch;
+  } catch (_e) {}
 
-      var pathOnly = String(url).split('?')[0];
-      var method = String((init && init.method) || 'GET').toUpperCase();
-      var body = parseJsonBody(init);
-      var token = getBearerToken(init && init.headers);
-      var cloud = window.ShimogyCloud;
-
-      if (cloud && typeof cloud.isEnabled === 'function' && cloud.isEnabled()) {
-        // 1. Public site data (always sync from Cloud Firestore when available so all devices see live edits)
-        if (pathOnly === '/api/site-data' && method === 'GET') {
-          return cloud.getPublicSiteData()
-            .then(function (cloudData) {
-              if (cloudData) return jsonResp(200, cloudData);
-              return fallbackHttpOrLocal(input, init, url);
-            })
-            .catch(function () {
-              return fallbackHttpOrLocal(input, init, url);
-            });
-        }
-
-        // 2. Public service requests -> saved directly to Cloud Firestore so admin sees them everywhere
-        if (pathOnly === '/api/requests' && method === 'POST') {
-          if (!body.request_type || !body.applicant_name || !body.applicant_phone) {
-            return Promise.resolve(jsonResp(400, { error: 'Full name, phone number, and request type are required.' }));
-          }
-          if (!body.age_confirmed) {
-            return Promise.resolve(jsonResp(400, { error: 'Age verification or parent/guardian consent confirmation is required.' }));
-          }
-          return cloud.createServiceRequest(body)
-            .then(function (res) {
-              if (window.location.protocol !== 'file:') {
-                nativeFetch(input, init).catch(function () {});
-              }
-              return jsonResp(201, res);
-            })
-            .catch(function () {
-              return fallbackHttpOrLocal(input, init, url);
-            });
-        }
-
-        // 3. Data deletion requests -> saved directly to Cloud Firestore
-        if (pathOnly === '/api/deletion-requests' && method === 'POST') {
-          if (!body.full_name || !body.phone) {
-            return Promise.resolve(jsonResp(400, { error: 'Full name and registered phone number are required to verify your deletion request.' }));
-          }
-          return cloud.createDeletionRequest(body)
-            .then(function (res) {
-              if (window.location.protocol !== 'file:') {
-                nativeFetch(input, init).catch(function () {});
-              }
-              return jsonResp(201, res);
-            })
-            .catch(function () {
-              return fallbackHttpOrLocal(input, init, url);
-            });
-        }
-
-        // 4. Member phone + password login -> works from any device globally via Cloud Firestore
-        if (pathOnly === '/api/member/login' && method === 'POST') {
-          return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
-            .then(function (cloudRes) {
-              if (cloudRes) return jsonResp(200, cloudRes);
-              return fallbackHttpOrLocal(input, init, url);
-            })
-            .catch(function () {
-              return fallbackHttpOrLocal(input, init, url);
-            });
-        }
-
-        // 5. Member session load (/api/member/me)
-        if (pathOnly === '/api/member/me' && method === 'GET' && (token.indexOf('cloud_portal_') === 0 || token.indexOf('cloud_mem_uid_') === 0)) {
-          var waitReady = token.indexOf('cloud_mem_uid_') === 0 && typeof cloud.waitForAuthReady === 'function'
-            ? cloud.waitForAuthReady()
-            : Promise.resolve();
-          return waitReady
-            .then(function () { return cloud.fetchMemberSessionFromCloud(token); })
-            .then(function (res) {
-              if (res) return jsonResp(200, res);
-              return jsonResp(401, { error: 'Session expired. Please sign in again.' });
-            })
-            .catch(function () {
-              return jsonResp(401, { error: 'Unable to load cloud portfolio.' });
-            });
-        }
-
-        // 6. Cloud logout
-        if (pathOnly === '/api/logout' && method === 'POST') {
-          var shouldCloudOut = token.indexOf('cloud_') === 0 || (typeof cloud.isAdminSignedIn === 'function' && cloud.isAdminSignedIn());
-          if (shouldCloudOut && typeof cloud.signOutCloud === 'function') {
-            cloud.signOutCloud().catch(function () {});
-          }
-          return fallbackHttpOrLocal(input, init, url);
-        }
-
-        // 7. Admin protected endpoints when authenticated with Cloud Admin
-        if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login') {
-          var isCloudToken = token.indexOf('cloud_adm_') === 0;
-          var authWait = typeof cloud.waitForAuthReady === 'function' ? cloud.waitForAuthReady() : Promise.resolve();
-          return authWait.then(function () {
-            if (cloud.isAdminSignedIn()) {
-              return cloud.handleAdminApi(pathOnly, method, body).then(function (cloudResp) {
-                if (cloudResp) return jsonResp(cloudResp.status, cloudResp.data);
-                return fallbackHttpOrLocal(input, init, url);
-              });
-            }
-            if (isCloudToken) {
-              return jsonResp(401, { error: 'Cloud administrator session expired. Please sign in with Google again.' });
-            }
-            return fallbackHttpOrLocal(input, init, url);
-          });
-        }
-      }
-
-      return fallbackHttpOrLocal(input, init, url);
-    };
+  try {
+    var ownDesc = Object.getOwnPropertyDescriptor(window, 'fetch');
+    if (!ownDesc || ownDesc.configurable) {
+      Object.defineProperty(window, 'fetch', {
+        configurable: true,
+        writable: true,
+        enumerable: true,
+        value: shimogyFetch
+      });
+    } else if (ownDesc.writable) {
+      window.fetch = shimogyFetch;
+    }
+  } catch (_e) {
+    // Some locked-down browser sandboxes expose fetch as a non-configurable getter;
+    // window.shimogyFetch handles all internal API calls safely without throwing.
   }
 })();
+
 

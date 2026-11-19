@@ -24,8 +24,167 @@
       return 'UGX ' + Math.round(num).toLocaleString('en-US');
     },
 
-    assetUrl: function (url) {
+    sanitizeUrl: function (url, fallback) {
       var clean = String(url || '').trim();
+      if (!clean) return fallback || '';
+      var lower = clean.toLowerCase().replace(/[\u0000-\u001F\u007F\s]+/g, '');
+      if (
+        lower.indexOf('javascript:') === 0 ||
+        lower.indexOf('vbscript:') === 0 ||
+        lower.indexOf('data:text/') === 0 ||
+        lower.indexOf('data:application/') === 0
+      ) {
+        return fallback || '';
+      }
+      if (
+        clean.indexOf('/') === 0 ||
+        clean.indexOf('assets/') === 0 ||
+        clean.indexOf('https://') === 0 ||
+        clean.indexOf('http://') === 0 ||
+        clean.indexOf('mailto:') === 0 ||
+        clean.indexOf('tel:') === 0 ||
+        clean.indexOf('data:image/') === 0 ||
+        /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(clean)
+      ) {
+        return clean;
+      }
+      return fallback || '';
+    },
+
+    todayISO: function () {
+      return new Date().toISOString().split('T')[0];
+    },
+
+    addDaysToISO: function (baseDateStr, daysToAdd) {
+      var clean = String(baseDateStr || '').slice(0, 10);
+      var base = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T00:00:00Z') : new Date();
+      if (Number.isNaN(base.getTime())) base = new Date();
+      base.setUTCDate(base.getUTCDate() + Number(daysToAdd || 0));
+      return base.toISOString().split('T')[0];
+    },
+
+    parseDurationDays: function (durationText, fallbackDays) {
+      var s = String(durationText || '').toLowerCase();
+      var m = s.match(/(\d+)/);
+      var n = m ? Number(m[1]) : 0;
+      if (s.indexOf('year') !== -1) return (n || 1) * 365;
+      if (s.indexOf('month') !== -1) return (n || 1) * 30;
+      if (s.indexOf('bi-week') !== -1) return 14;
+      if (s.indexOf('week') !== -1) return (n || 1) * 7;
+      if (s.indexOf('daily') !== -1) return 1;
+      if (n > 0) return n;
+      return fallbackDays || 30;
+    },
+
+    computeReturnsDate: function (inv) {
+      var given = String((inv && inv.returns_date) || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+      var base = String((inv && inv.created_at) || this.todayISO()).slice(0, 10);
+      var days = this.parseDurationDays(inv && inv.duration, 60);
+      return this.addDaysToISO(base, days);
+    },
+
+    computeLoanReturnDate: function (loan) {
+      var given = String((loan && loan.return_date) || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+      var base = String((loan && loan.request_date) || (loan && loan.created_at) || this.todayISO()).slice(0, 10);
+      var days = this.parseDurationDays(loan && loan.duration, 30);
+      return this.addDaysToISO(base, days);
+    },
+
+    computeLoanCountdown: function (loan) {
+      var status = String((loan && loan.status) || 'active').toLowerCase();
+      var returnDate = this.computeLoanReturnDate(loan);
+      if (status === 'paid' || status === 'settled' || status === 'closed') {
+        return { returnDate: returnDate, label: 'Settled / Paid', tone: 'ok', daysLeft: 0 };
+      }
+      var today = new Date(this.todayISO() + 'T00:00:00Z');
+      var target = new Date(returnDate + 'T00:00:00Z');
+      if (Number.isNaN(target.getTime())) {
+        return { returnDate: returnDate, label: 'Pending schedule', tone: 'neutral', daysLeft: null };
+      }
+      var diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+      if (diffDays > 7) {
+        return { returnDate: returnDate, label: diffDays + ' days remaining', tone: 'ok', daysLeft: diffDays };
+      }
+      if (diffDays > 1) {
+        return { returnDate: returnDate, label: diffDays + ' days remaining', tone: 'warn', daysLeft: diffDays };
+      }
+      if (diffDays === 1) {
+        return { returnDate: returnDate, label: '1 day remaining (Due Tomorrow)', tone: 'warn', daysLeft: 1 };
+      }
+      if (diffDays === 0) {
+        return { returnDate: returnDate, label: 'Due Today', tone: 'danger', daysLeft: 0 };
+      }
+      var overdue = Math.abs(diffDays);
+      return { returnDate: returnDate, label: 'Overdue by ' + overdue + (overdue === 1 ? ' day' : ' days'), tone: 'danger', daysLeft: diffDays };
+    },
+
+    normalizeSavingsStatus: function (accountType, status) {
+      var raw = String(status || '').trim().toLowerCase();
+      if (raw === 'suspended' || raw === 'closed') return status;
+      if (String(accountType || '').toLowerCase().indexOf('fixed') !== -1) return 'Locked';
+      return 'Available';
+    },
+
+    computeCycleTurnState: function (cycle) {
+      var totalClients = Math.max(2, Number((cycle && cycle.number_of_members) || 10));
+      var initialTurn = Math.min(totalClients, Math.max(1, Number((cycle && cycle.cycle_number) || 1)));
+      var cycleType = String((cycle && cycle.cycle_type) || 'public').toLowerCase() === 'custom' ? 'custom' : 'public';
+      var status = String((cycle && cycle.status) || 'active').toLowerCase();
+      var periodDays = Math.max(1, this.parseDurationDays(cycle && cycle.payout_duration, 7));
+
+      var joinStr = String((cycle && (cycle.join_date || cycle.created_at)) || this.todayISO()).slice(0, 10);
+      var joinDate = /^\d{4}-\d{2}-\d{2}$/.test(joinStr) ? new Date(joinStr + 'T00:00:00Z') : new Date();
+      var today = new Date(this.todayISO() + 'T00:00:00Z');
+      var elapsedDays = Math.max(0, Math.floor((today.getTime() - joinDate.getTime()) / 86400000));
+      var elapsedTurns = Math.floor(elapsedDays / periodDays);
+      var currentTurn = Math.max(0, initialTurn - elapsedTurns);
+      var daysToNext = Math.max(0, currentTurn * periodDays - elapsedDays);
+
+      if (status === 'exited' || status === 'stopped' || status === 'completed') {
+        return {
+          initialTurn: initialTurn,
+          currentTurn: currentTurn,
+          totalClients: totalClients,
+          cycleType: cycleType,
+          status: status,
+          payoutReached: false,
+          daysToPayout: 0,
+          label: '#' + initialTurn + ' (' + (status === 'exited' ? 'Exited' : status === 'stopped' ? 'Stopped' : 'Completed') + ')',
+          subLabel: cycleType === 'custom' ? 'Custom Cycle' : 'Public Cycle'
+        };
+      }
+
+      if (currentTurn <= 0) {
+        return {
+          initialTurn: initialTurn,
+          currentTurn: 0,
+          totalClients: totalClients,
+          cycleType: cycleType,
+          status: status,
+          payoutReached: true,
+          daysToPayout: 0,
+          label: 'Payout Day Reached!',
+          subLabel: 'Started at #' + initialTurn + ' · Turn Ready'
+        };
+      }
+
+      return {
+        initialTurn: initialTurn,
+        currentTurn: currentTurn,
+        totalClients: totalClients,
+        cycleType: cycleType,
+        status: status,
+        payoutReached: false,
+        daysToPayout: daysToNext,
+        label: 'My Cycle #' + currentTurn + ' of ' + totalClients,
+        subLabel: '~' + daysToNext + 'd to payout (from #' + initialTurn + ')'
+      };
+    },
+
+    assetUrl: function (url) {
+      var clean = this.sanitizeUrl(url, 'assets/aistudio/logo2_be71428a.jpg');
       if (!clean) return 'assets/aistudio/logo2_be71428a.jpg';
       if (clean.indexOf('logobg_263a028d.png') !== -1) {
         clean = 'assets/aistudio/logo2_be71428a.jpg';
@@ -64,9 +223,14 @@
       return url;
     },
 
+    apiFetch: function (input, init) {
+      var fn = (typeof window.shimogyFetch === 'function' ? window.shimogyFetch : window.fetch);
+      return fn.call(window, input, init);
+    },
+
     fetchSiteData: function () {
       if (!this.dataPromise) {
-        this.dataPromise = fetch('/api/site-data', { cache: 'no-store' })
+        this.dataPromise = this.apiFetch('/api/site-data', { cache: 'no-store' })
           .then(function (res) {
             if (!res.ok) throw new Error('Failed to load site data');
             return res.json();
@@ -78,7 +242,53 @@
       return this.dataPromise;
     },
 
+    initImageTransitions: function (root) {
+      var self = this;
+      var scope = root || document;
+      var imgs = scope.querySelectorAll('img');
+      imgs.forEach(function (img, idx) {
+        if (img.classList.contains('brand-logo') || img.closest('.leaflet-container')) return;
+        img.classList.add('img-lively');
+        var rawSrc = img.getAttribute('src');
+        if (rawSrc && rawSrc.indexOf('/assets/') === 0) {
+          img.setAttribute('src', self.assetUrl(rawSrc));
+        }
+
+        var markLoaded = function () {
+          requestAnimationFrame(function () {
+            img.classList.add('is-img-loaded');
+          });
+        };
+
+        if (!img.dataset.livelyBound) {
+          img.dataset.livelyBound = '1';
+          img.addEventListener('load', markLoaded);
+          img.addEventListener('error', function () {
+            if (!img.dataset.fallbackApplied) {
+              img.dataset.fallbackApplied = '1';
+              img.setAttribute('src', self.assetUrl('assets/aistudio/logo2_be71428a.jpg'));
+            }
+            markLoaded();
+          });
+        }
+
+        if (img.complete) {
+          // Stagger initial reveal slightly so cached images still glide in smoothly on paint
+          setTimeout(markLoaded, Math.min(idx * 35, 220));
+        }
+      });
+    },
+
     initNavigation: function () {
+      var header = document.querySelector('.site-header');
+      if (header) {
+        var syncHeaderScroll = function () {
+          header.classList.toggle('scrolled', (window.scrollY || window.pageYOffset || 0) > 18);
+        };
+        syncHeaderScroll();
+        window.addEventListener('scroll', syncHeaderScroll, { passive: true });
+      }
+
       var menuBtn = document.getElementById('mobileMenuBtn');
       var nav = document.getElementById('primaryNav');
       if (menuBtn && nav) {
@@ -129,10 +339,23 @@
       });
     },
 
+    flushVisibleReveals: function () {
+      var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      document.querySelectorAll('.reveal:not(.is-visible)').forEach(function (el) {
+        var rect = el.getBoundingClientRect();
+        if (rect.top <= vh * 0.97 && rect.bottom >= -40) {
+          el.classList.add('is-visible');
+        }
+      });
+    },
+
     observeReveals: function (root) {
+      var self = this;
       var scope = root || document;
+      this.initImageTransitions(scope);
+
       var targets = scope.querySelectorAll(
-        '.section-heading, .plan-card, .numbered-card, .kpi-box, .testimonial-card, .feature-panel, .loan-box, .news-card, .hero-main, .hero-side-card, .sidebar-section, .chart-card, .panel-card, .form-card, .info-banner, .table-wrap, .two-col-grid > *, .loan-grid > *, .legal-article > h2, .legal-article > p, .legal-article > ul, .footer-grid > *'
+        '.section-heading, .plan-card, .numbered-card, .kpi-box, .testimonial-card, .feature-panel, .loan-box, .news-card, .hero-main, .hero-side-card, .sidebar-section, .chart-card, .panel-card, .form-card, .info-banner, .alert-box, .table-wrap, .div-photo-shell, .photo-showcase-frame, .kpi-strip > *, .numbered-grid > *, .loan-grid > *, .two-col-grid > *, .legal-article > h2, .legal-article > p, .legal-article > ul, .footer-grid > *'
       );
 
       var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -149,14 +372,26 @@
             entries.forEach(function (entry) {
               if (entry.isIntersecting) {
                 entry.target.classList.add('is-visible');
-              } else if (entry.boundingClientRect.top > window.innerHeight * 0.96) {
-                // Reset only when scrolled completely back up so scrolling down again slides it smoothly
-                entry.target.classList.remove('is-visible');
+                revealObserver.unobserve(entry.target);
               }
             });
           },
-          { threshold: 0.1, rootMargin: '0px 0px -48px 0px' }
+          { threshold: 0.01, rootMargin: '0px 0px 48px 0px' }
         );
+      }
+
+      if (!window.__shimogyRevealScrollBound) {
+        window.__shimogyRevealScrollBound = true;
+        var scrollRaf = null;
+        var onViewportChange = function () {
+          if (scrollRaf) return;
+          scrollRaf = requestAnimationFrame(function () {
+            scrollRaf = null;
+            self.flushVisibleReveals();
+          });
+        };
+        window.addEventListener('scroll', onViewportChange, { passive: true });
+        window.addEventListener('resize', onViewportChange, { passive: true });
       }
 
       var newlyArmed = [];
@@ -169,6 +404,8 @@
             var siblingIndex = parent ? Array.prototype.indexOf.call(parent.children, el) : idx;
             if (el.classList.contains('hero-side-card') || el.closest('.updates-sidebar')) {
               el.classList.add('reveal-right');
+            } else if (el.classList.contains('div-photo-shell') || el.classList.contains('photo-showcase-frame')) {
+              el.classList.add(idx % 2 === 0 ? 'reveal-right' : 'reveal-left');
             } else if (el.classList.contains('hero-main') || el.classList.contains('section-heading')) {
               el.classList.add(idx % 2 === 0 ? 'reveal-left' : 'reveal-right');
             } else {
@@ -185,14 +422,16 @@
       });
 
       if (newlyArmed.length) {
-        // Wait two frames so the browser commits the initial off-center transform before observing
         requestAnimationFrame(function () {
+          newlyArmed.forEach(function (el) {
+            revealObserver.observe(el);
+          });
           requestAnimationFrame(function () {
-            newlyArmed.forEach(function (el) {
-              revealObserver.observe(el);
-            });
+            self.flushVisibleReveals();
           });
         });
+      } else {
+        this.flushVisibleReveals();
       }
     },
 
@@ -259,6 +498,7 @@
     },
 
     hydrateBusinessInfo: function (data) {
+      var self = this;
       var s = (data && data.settings) || {};
       if (s.whatsapp_number) {
         this.defaultWhatsapp = s.whatsapp_number;
@@ -270,7 +510,8 @@
       };
       var setHref = function (id, val) {
         var el = document.getElementById(id);
-        if (el && val) el.setAttribute('href', val);
+        var safe = self.sanitizeUrl(val, '');
+        if (el && safe) el.setAttribute('href', safe);
       };
 
       setText('footerCompanyName', s.company_name);

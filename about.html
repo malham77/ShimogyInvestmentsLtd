@@ -173,15 +173,15 @@
             <span class="eyebrow-text">Our Story</span>
             <h2 id="storyHeading" style="font-size:2rem;margin-bottom:14px;">Partners for Life Since 2023</h2>
             <p id="aboutStoryText" style="color:var(--text-secondary);font-size:1rem;line-height:1.75;margin-bottom:20px;">
-              SHIMOGY Investment Group Ltd is a Kampala-based investment and community savings organization operating from Kawempe Tula. Founded in 2023, we structure local business ventures, savings accounts, rotating community cycles, and member financing with transparent reporting.
+              SHIMOGY Investment Group Ltd is a Kampala-based investment and community savings organization operating from Kawempe Tula. Founded in 2023, we structure local business ventures, savings accounts, rotating community cycles, and client financing with transparent reporting.
             </p>
             <div style="display:flex;gap:12px;flex-wrap:wrap;">
               <a href="investments.html" class="btn btn-primary btn-sm">View Investment Plans</a>
               <a href="privacy.html#data-deletion" class="btn btn-outline btn-sm">Data Privacy &amp; Deletion</a>
             </div>
           </div>
-          <div>
-            <img src="assets/aistudio/partnership_65dac3a6.jpg" alt="SHIMOGY Investment Group leadership and partners shaking hands on verified enterprise agreements" style="width:100%;height:340px;object-fit:cover;border-radius:var(--radius-md);border:1px solid var(--border-light);" />
+          <div class="photo-showcase-frame" style="height:350px;">
+            <img src="assets/aistudio/partnership_65dac3a6.jpg" alt="SHIMOGY Investment Group leadership and partners shaking hands on verified enterprise agreements" />
           </div>
         </div>
 
@@ -209,7 +209,9 @@
     </section>
 
     <!-- Core Values & Governance -->
-    <section class="section section-subtle" aria-labelledby="valuesHeading">
+    <section class="section section-photo-band" aria-labelledby="valuesHeading">
+      <img src="assets/aistudio/grocery_3e5981e4.PNG" alt="" class="section-photo-bg" aria-hidden="true" />
+      <div class="section-photo-scrim" aria-hidden="true"></div>
       <div class="container">
         <div class="section-heading">
           <span class="eyebrow-text">Operating Principles</span>
@@ -220,7 +222,7 @@
           <article class="numbered-card">
             <span class="step-index">01</span>
             <h3>Transparency</h3>
-            <p>All member transactions, investment slots, savings deposits, and loan approvals are logged and visible in your Client Portal.</p>
+            <p>All client transactions, investment slots, savings deposits, and loan approvals are logged and visible in your Client Portal.</p>
           </article>
           <article class="numbered-card">
             <span class="step-index">02</span>
@@ -230,7 +232,7 @@
           <article class="numbered-card">
             <span class="step-index">03</span>
             <h3>Data Minimization</h3>
-            <p>We collect only the personal details strictly necessary to verify identity, process service requests, and manage member ledgers.</p>
+            <p>We collect only the personal details strictly necessary to verify identity, process service requests, and manage client ledgers.</p>
           </article>
           <article class="numbered-card">
             <span class="step-index">04</span>
@@ -245,8 +247,10 @@
     <section class="section" aria-labelledby="officeDetailsHeading">
       <div class="container">
         <div class="two-col-grid">
-          <div class="feature-panel">
-            <div>
+          <div class="div-photo-shell">
+            <img src="assets/aistudio/transport_459a1a5e.jpg" alt="" class="div-photo-bg" aria-hidden="true" />
+            <div class="div-photo-scrim" aria-hidden="true"></div>
+            <div class="div-photo-inner">
               <span class="eyebrow-text">Official Registration &amp; Contact</span>
               <h2 id="officeDetailsHeading" style="font-size:1.65rem;margin-bottom:14px;">Business Details</h2>
               <ul class="clean-list">
@@ -307,7 +311,7 @@
             <li><a href="investments.html">Investment Plans</a></li>
             <li><a href="cycles.html">Savings Cycles</a></li>
             <li><a href="savings.html">Savings Accounts</a></li>
-            <li><a href="loans.html">Member Loans</a></li>
+            <li><a href="loans.html">Client Loans</a></li>
             <li><a href="updates.html">News &amp; Updates</a></li>
             <li><a href="dashboard.html">Client Portal</a></li>
           </ul>
@@ -354,6 +358,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="js/firebase-bridge.js"></script>
+  <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>

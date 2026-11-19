@@ -197,19 +197,27 @@
           <p class="metric-label">Loading investment plans...</p>
         </div>
 
-        <p id="invRiskDisclosure" class="alert-box alert-info" style="margin-top:28px;">
-          Risk Disclosure: Projected returns depend on underlying enterprise operations and market conditions. Please confirm terms with our Operations Team before committing capital.
-        </p>
+        <div class="div-photo-shell" style="margin-top:28px;padding:20px 24px;">
+          <img src="assets/aistudio/poultry_4e5861c3.jpg" alt="" class="div-photo-bg" aria-hidden="true" />
+          <div class="div-photo-scrim" aria-hidden="true"></div>
+          <div class="div-photo-inner">
+            <p id="invRiskDisclosure" style="margin:0;font-size:0.92rem;color:var(--text-heading);font-weight:500;">
+              Risk Disclosure: Projected returns depend on underlying enterprise operations and market conditions. Please confirm terms with our Operations Team before committing capital.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Why Invest With SHIMOGY? (Figures 01-05 without icons) -->
-    <section class="section section-subtle" aria-labelledby="whyInvestHeading">
+    <!-- Why Invest With SHIMOGY? (Photo Backdrop Band, Figures 01-05 without icons) -->
+    <section class="section section-photo-band" aria-labelledby="whyInvestHeading">
+      <img src="assets/aistudio/grocery_3e5981e4.PNG" alt="" class="section-photo-bg" aria-hidden="true" />
+      <div class="section-photo-scrim" aria-hidden="true"></div>
       <div class="container">
         <div class="section-heading">
           <span class="eyebrow-text">Our Operational Approach</span>
           <h2 id="whyInvestHeading">Why Invest With SHIMOGY?</h2>
-          <p>Five principles guiding how we evaluate ventures, allocate slots, and report progress to members.</p>
+          <p>Five principles guiding how we evaluate ventures, allocate slots, and report progress to clients.</p>
         </div>
 
         <div class="numbered-grid">
@@ -231,7 +239,7 @@
           <article class="numbered-card">
             <span class="step-index">04</span>
             <h3>Client Portal Visibility</h3>
-            <p>Approved member investments reflect directly in the Client Portal with status tracking from activation to completion.</p>
+            <p>Approved client investments reflect directly in the Client Portal with status tracking from activation to completion.</p>
           </article>
           <article class="numbered-card">
             <span class="step-index">05</span>
@@ -317,7 +325,7 @@
             <li><a href="investments.html">Investment Plans</a></li>
             <li><a href="cycles.html">Savings Cycles</a></li>
             <li><a href="savings.html">Savings Accounts</a></li>
-            <li><a href="loans.html">Member Loans</a></li>
+            <li><a href="loans.html">Client Loans</a></li>
             <li><a href="updates.html">News &amp; Updates</a></li>
             <li><a href="dashboard.html">Client Portal</a></li>
           </ul>
@@ -363,6 +371,7 @@
   </div>
 
   <script src="js/firebase-bridge.js"></script>
+  <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>
@@ -452,7 +461,7 @@
         var guardian = document.getElementById('reqInvGuardian').value.trim();
         var fb = document.getElementById('investFormFeedback');
 
-        fetch('/api/requests', {
+        site.apiFetch('/api/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

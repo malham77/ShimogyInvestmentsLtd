@@ -8,6 +8,9 @@
   var adminPieChart = null;
   var adminBarChart = null;
   var state = {
+    databaseMode: 'sqlite',
+    supabaseUrl: 'https://ihgfsvkcpgxklotjmokl.supabase.co',
+    currentAdminEmail: '',
     settings: {},
     members: [],
     investments: [],
@@ -46,7 +49,7 @@
     opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     var token = getToken();
     if (token) opts.headers.Authorization = 'Bearer ' + token;
-    return fetch(url, opts).then(function (r) {
+    return site.apiFetch(url, opts).then(function (r) {
       return r.text().then(function (txt) {
         var data = {};
         try { data = txt ? JSON.parse(txt) : {}; } catch (_e) { data = { error: 'Server returned an unexpected response (' + r.status + ').' }; }
@@ -174,6 +177,17 @@
       activeBtn.classList.add('active');
       document.getElementById('activeTabTitle').textContent = labelText || activeBtn.textContent.trim();
     }
+    if (tabId === 'tab-overview') {
+      requestAnimationFrame(function () {
+        if (adminPieChart && typeof adminPieChart.resize === 'function') adminPieChart.resize();
+        if (adminBarChart && typeof adminBarChart.resize === 'function') adminBarChart.resize();
+      });
+    } else if (tabId === 'tab-account' && state.currentAdminEmail) {
+      var secEmailEl = document.getElementById('secAdminEmail');
+      if (secEmailEl && !secEmailEl.dataset.userEdited) {
+        secEmailEl.value = state.currentAdminEmail;
+      }
+    }
     closeMobileSidebar();
   }
 
@@ -229,7 +243,7 @@
       type: 'doughnut',
       data: {
         labels: hasFunds
-          ? ['Member Investments', 'Savings Deposits', 'Member Loans', 'Cycle Contributions']
+          ? ['Client Investments', 'Savings Deposits', 'Client Loans', 'Cycle Contributions']
           : ['No Financial Balances Recorded'],
         datasets: [{
           data: hasFunds ? [invTotal, savTotal, loanTotal, cycleTotal] : [1],
@@ -318,6 +332,39 @@
     });
   }
 
+  function renderDbConnectionBadge() {
+    var badge = document.getElementById('dbConnectionBadge');
+    if (!badge) return;
+    var mode = String(state.databaseMode || 'sqlite').toLowerCase();
+    if (mode === 'postgres') {
+      badge.className = 'countdown-text countdown-ok';
+      badge.textContent = 'Connected Live to Supabase PostgreSQL';
+    } else if (window.ShimogySupabase && typeof window.ShimogySupabase.getPublicSiteData === 'function') {
+      badge.className = 'countdown-text countdown-ok';
+      badge.textContent = 'Operations Server Active · Checking Supabase REST...';
+      window.ShimogySupabase.getPublicSiteData()
+        .then(function (sbData) {
+          if (!badge) return;
+          if (sbData && sbData.source === 'supabase') {
+            badge.className = 'countdown-text countdown-ok';
+            badge.textContent = 'Live Supabase REST Connected · Operations Server Active';
+          } else {
+            badge.className = 'countdown-text countdown-warn';
+            badge.textContent = 'Operations Database Active (Local Sync)';
+          }
+        })
+        .catch(function () {
+          if (badge) {
+            badge.className = 'countdown-text countdown-warn';
+            badge.textContent = 'Operations Database Active';
+          }
+        });
+    } else {
+      badge.className = 'countdown-text countdown-neutral';
+      badge.textContent = 'Live Workspace Active';
+    }
+  }
+
   // Render All Sections
   function renderOverview() {
     document.getElementById('ovMembersCount').textContent = String(state.members.length);
@@ -326,12 +373,21 @@
     var pending = state.requests.filter(function (r) { return r.status === 'pending'; }).length;
     document.getElementById('ovPendingReqCount').textContent = String(pending);
 
+    renderDbConnectionBadge();
     renderOverviewCharts();
 
     var invBody = document.getElementById('ovRecentInvBody');
     invBody.innerHTML = state.investments.slice(0, 6).map(function (i) {
-      return '<tr><td>' + site.escapeHtml(i.member_name) + '</td><td>' + site.escapeHtml(i.plan_name) + '</td><td class="tabular-nums">' + site.formatUGX(i.amount) + '</td><td>' + site.escapeHtml(i.status) + '</td></tr>';
-    }).join('') || '<tr><td colspan="4">No investments yet.</td></tr>';
+      return (
+        '<tr>' +
+          '<td>' + site.escapeHtml(i.member_name) + '</td>' +
+          '<td>' + site.escapeHtml(i.plan_name) + '</td>' +
+          '<td class="tabular-nums">' + site.formatUGX(i.amount) + '</td>' +
+          '<td class="font-mono-num">' + site.escapeHtml(site.computeReturnsDate(i)) + '</td>' +
+          '<td>' + site.escapeHtml(i.status) + '</td>' +
+        '</tr>'
+      );
+    }).join('') || '<tr><td colspan="5">No client investments yet.</td></tr>';
 
     var reqBody = document.getElementById('ovRecentReqBody');
     reqBody.innerHTML = state.requests.slice(0, 6).map(function (r) {
@@ -383,10 +439,10 @@
           '<td><img src="' + site.escapeHtml(site.assetUrl(h.image_url)) + '" alt="' + site.escapeHtml(h.image_alt) + '" width="72" height="44" style="object-fit:cover;border-radius:4px;" /></td>' +
           '<td><strong>' + site.escapeHtml(h.title) + '</strong></td>' +
           '<td>' + site.escapeHtml(h.cta_text) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm edit-hero-btn" data-id="' + h.id + '">Edit</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-hero-btn" data-id="' + h.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="5">No hero slides configured.</td></tr>';
@@ -433,10 +489,10 @@
           '<td><strong>' + site.escapeHtml(t.client_name) + '</strong></td>' +
           '<td>' + site.escapeHtml(t.role) + ' · ' + site.escapeHtml(t.location) + '</td>' +
           '<td style="max-width:300px;">' + site.escapeHtml(t.quote) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm edit-test-btn" data-id="' + t.id + '">Edit</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-test-btn" data-id="' + t.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="5">No testimonials added yet.</td></tr>';
@@ -480,10 +536,10 @@
           '<td>' + site.escapeHtml(p.duration) + '</td>' +
           '<td>' + site.escapeHtml(p.risk) + '</td>' +
           '<td class="tabular-nums">' + site.escapeHtml(p.slots_left) + ' (' + site.escapeHtml(p.status) + ')</td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm edit-plan-btn" data-id="' + p.id + '">Edit</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-plan-btn" data-id="' + p.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="7">No public plans yet.</td></tr>';
@@ -530,10 +586,10 @@
           '<td class="tabular-nums">' + site.formatUGX(c.contribution) + '</td>' +
           '<td>' + site.escapeHtml(c.payout_duration) + '</td>' +
           '<td><span class="status-text status-active">Active</span></td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm edit-pub-cyc-btn" data-id="' + c.id + '">Edit</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-pub-cyc-btn" data-id="' + c.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="6">No public cycles created yet.</td></tr>';
@@ -588,13 +644,13 @@
     });
   }
 
-  function inspectMemberByPhone(phone) {
+  function inspectMemberByPhone(phone, skipScroll) {
     apiFetch('/api/admin/member/' + encodeURIComponent(phone))
       .then(function (data) {
         var m = data.member;
         var card = document.getElementById('memberInspectorCard');
         card.style.display = 'block';
-        document.getElementById('inspectorTitle').textContent = 'Editing Member: ' + m.name + ' (' + m.phone + ')';
+        document.getElementById('inspectorTitle').textContent = 'Update Client: ' + m.name + ' (' + m.phone + ')';
         document.getElementById('editMemId').value = m.id;
         document.getElementById('editMemName').value = m.name || '';
         document.getElementById('editMemPhone').value = m.phone || '';
@@ -605,17 +661,254 @@
         document.getElementById('editMemStatus').value = m.status || 'active';
         document.getElementById('editMemNewPass').value = '';
 
-        var ledgers =
-          '<h4>Investments (' + m.investments.length + ')</h4>' +
-          '<ul class="clean-list">' + (m.investments.map(function (i) { return '<li>' + site.escapeHtml(i.plan_name) + ' — ' + site.formatUGX(i.amount) + ' -> ' + site.formatUGX(i.expected_return) + ' (' + site.escapeHtml(i.duration) + ')</li>'; }).join('') || '<li>None</li>') + '</ul>' +
-          '<h4 style="margin-top:12px;">Savings (' + m.savings.length + ')</h4>' +
-          '<ul class="clean-list">' + (m.savings.map(function (s) { return '<li>' + site.escapeHtml(s.account_type) + ' — ' + site.formatUGX(s.balance) + '</li>'; }).join('') || '<li>None</li>') + '</ul>' +
-          '<h4 style="margin-top:12px;">Loans (' + m.loans.length + ')</h4>' +
-          '<ul class="clean-list">' + (m.loans.map(function (l) { return '<li>' + site.formatUGX(l.amount) + ' (' + site.escapeHtml(l.duration) + ' · ' + site.escapeHtml(l.status) + ') — ' + site.escapeHtml(l.purpose) + '</li>'; }).join('') || '<li>None</li>') + '</ul>' +
-          '<h4 style="margin-top:12px;">Cycles (' + m.cycles.length + ')</h4>' +
-          '<ul class="clean-list">' + (m.cycles.map(function (c) { return '<li>' + site.escapeHtml(c.cycle_name) + ' — ' + site.formatUGX(c.contribution) + ' (' + site.escapeHtml(c.payout_duration) + ', ' + site.escapeHtml(c.number_of_members) + ' members)</li>'; }).join('') || '<li>None</li>') + '</ul>';
-        document.getElementById('inspectorLedgers').innerHTML = ledgers;
-        card.scrollIntoView({ behavior: 'smooth' });
+        var invHtml = (m.investments || []).map(function (i) {
+          var retDt = site.computeReturnsDate(i);
+          var st = String(i.status || 'active').toLowerCase();
+          return (
+            '<div class="inspector-record-card" data-inv-id="' + site.escapeHtml(i.id) + '">' +
+              '<div class="inspector-record-grid">' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Plan Name</label><input type="text" class="insp-inv-plan" value="' + site.escapeHtml(i.plan_name || '') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Capital (UGX)</label><input type="number" class="insp-inv-amt" min="0" value="' + site.escapeHtml(i.amount || 0) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Expected Return</label><input type="number" class="insp-inv-ret" min="0" value="' + site.escapeHtml(i.expected_return || 0) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Duration</label><input type="text" class="insp-inv-dur" value="' + site.escapeHtml(i.duration || '60 Days') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Returns Date</label><input type="date" class="insp-inv-date" value="' + site.escapeHtml(retDt) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Status</label>' +
+                  '<select class="insp-inv-status">' +
+                    '<option value="active"' + (st === 'active' ? ' selected' : '') + '>Active</option>' +
+                    '<option value="completed"' + (st === 'completed' ? ' selected' : '') + '>Completed</option>' +
+                    '<option value="closed"' + (st === 'closed' ? ' selected' : '') + '>Closed</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+              '<div class="inspector-record-actions">' +
+                '<button type="button" class="btn btn-primary btn-sm insp-inv-save" data-id="' + site.escapeHtml(i.id) + '">Update Investment</button>' +
+                '<button type="button" class="btn btn-danger btn-sm insp-inv-del" data-id="' + site.escapeHtml(i.id) + '">Delete</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') || '<p style="font-size:0.86rem;color:var(--text-muted);">No investments recorded for this client.</p>';
+
+        var savHtml = (m.savings || []).map(function (s) {
+          var acct = String(s.account_type || 'Current Account');
+          var normSt = site.normalizeSavingsStatus(acct, s.status);
+          return (
+            '<div class="inspector-record-card" data-sav-id="' + site.escapeHtml(s.id) + '">' +
+              '<div class="inspector-record-grid">' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Account Type</label>' +
+                  '<select class="insp-sav-type">' +
+                    '<option value="Current Account"' + (acct === 'Current Account' ? ' selected' : '') + '>Current Account</option>' +
+                    '<option value="Fixed Account"' + (acct === 'Fixed Account' ? ' selected' : '') + '>Fixed Account</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Balance (UGX)</label><input type="number" class="insp-sav-bal" min="0" value="' + site.escapeHtml(s.balance || 0) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Status (Auto: Fixed=Locked, Current=Available)</label>' +
+                  '<select class="insp-sav-status">' +
+                    '<option value="Available"' + (normSt === 'Available' ? ' selected' : '') + '>Available</option>' +
+                    '<option value="Locked"' + (normSt === 'Locked' ? ' selected' : '') + '>Locked</option>' +
+                    '<option value="suspended"' + (normSt === 'suspended' ? ' selected' : '') + '>Suspended</option>' +
+                    '<option value="closed"' + (normSt === 'closed' ? ' selected' : '') + '>Closed</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+              '<div class="inspector-record-actions">' +
+                '<button type="button" class="btn btn-primary btn-sm insp-sav-save" data-id="' + site.escapeHtml(s.id) + '">Update Savings</button>' +
+                '<button type="button" class="btn btn-danger btn-sm insp-sav-del" data-id="' + site.escapeHtml(s.id) + '">Delete</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') || '<p style="font-size:0.86rem;color:var(--text-muted);">No savings accounts recorded for this client.</p>';
+
+        var loanHtml = (m.loans || []).map(function (l) {
+          var cd = site.computeLoanCountdown(l);
+          var st = String(l.status || 'active').toLowerCase();
+          return (
+            '<div class="inspector-record-card" data-loan-id="' + site.escapeHtml(l.id) + '">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">' +
+                '<span style="font-size:0.8rem;font-weight:700;color:var(--text-muted);">Daily Countdown:</span>' +
+                '<span class="countdown-text countdown-' + cd.tone + '">' + site.escapeHtml(cd.label) + '</span>' +
+              '</div>' +
+              '<div class="inspector-record-grid">' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Loan Amount (UGX)</label><input type="number" class="insp-loan-amt" min="0" value="' + site.escapeHtml(l.amount || 0) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Purpose</label><input type="text" class="insp-loan-purpose" value="' + site.escapeHtml(l.purpose || '') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Duration</label><input type="text" class="insp-loan-dur" value="' + site.escapeHtml(l.duration || '30 days') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Interest Rate</label><input type="text" class="insp-loan-rate" value="' + site.escapeHtml(l.interest_rate || '10%') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Returning Date</label><input type="date" class="insp-loan-date" value="' + site.escapeHtml(cd.returnDate) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Status</label>' +
+                  '<select class="insp-loan-status">' +
+                    '<option value="active"' + (st === 'active' ? ' selected' : '') + '>Active</option>' +
+                    '<option value="pending"' + (st === 'pending' ? ' selected' : '') + '>Pending</option>' +
+                    '<option value="paid"' + (st === 'paid' ? ' selected' : '') + '>Paid</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+              '<div class="inspector-record-actions">' +
+                '<button type="button" class="btn btn-primary btn-sm insp-loan-save" data-id="' + site.escapeHtml(l.id) + '">Update Loan</button>' +
+                '<button type="button" class="btn btn-danger btn-sm insp-loan-del" data-id="' + site.escapeHtml(l.id) + '">Delete</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') || '<p style="font-size:0.86rem;color:var(--text-muted);">No loans recorded for this client.</p>';
+
+        var cycHtml = (m.cycles || []).map(function (c) {
+          var ts = site.computeCycleTurnState(c);
+          var cType = ts.cycleType;
+          var st = String(c.status || 'active').toLowerCase();
+          return (
+            '<div class="inspector-record-card" data-cyc-id="' + site.escapeHtml(c.id) + '">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">' +
+                '<span class="cycle-turn-main">' + site.escapeHtml(ts.label) + '</span>' +
+                '<span class="cycle-turn-sub">' + site.escapeHtml(ts.subLabel) + '</span>' +
+              '</div>' +
+              '<div class="inspector-record-grid">' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Cycle Name</label><input type="text" class="insp-cyc-name" value="' + site.escapeHtml(c.cycle_name || '') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Contribution (UGX)</label><input type="number" class="insp-cyc-contrib" min="0" value="' + site.escapeHtml(c.contribution || 0) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Pay Out Duration</label><input type="text" class="insp-cyc-payout" value="' + site.escapeHtml(c.payout_duration || 'Weekly') + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Clients Count</label><input type="number" class="insp-cyc-total" min="2" value="' + site.escapeHtml(c.number_of_members || 10) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>My Cycle Number</label><input type="number" class="insp-cyc-num" min="1" value="' + site.escapeHtml(c.cycle_number || 1) + '" /></div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Cycle Type</label>' +
+                  '<select class="insp-cyc-type">' +
+                    '<option value="public"' + (cType === 'public' ? ' selected' : '') + '>Public Cycle</option>' +
+                    '<option value="custom"' + (cType === 'custom' ? ' selected' : '') + '>Custom Cycle</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="form-field" style="margin-bottom:0;"><label>Status</label>' +
+                  '<select class="insp-cyc-status">' +
+                    '<option value="active"' + (st === 'active' ? ' selected' : '') + '>Active</option>' +
+                    '<option value="exited"' + (st === 'exited' ? ' selected' : '') + '>Exited</option>' +
+                    '<option value="stopped"' + (st === 'stopped' ? ' selected' : '') + '>Stopped</option>' +
+                    '<option value="completed"' + (st === 'completed' ? ' selected' : '') + '>Completed</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+              '<div class="inspector-record-actions">' +
+                '<button type="button" class="btn btn-primary btn-sm insp-cyc-save" data-id="' + site.escapeHtml(c.id) + '">Update Cycle</button>' +
+                '<button type="button" class="btn btn-danger btn-sm insp-cyc-del" data-id="' + site.escapeHtml(c.id) + '">Delete</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') || '<p style="font-size:0.86rem;color:var(--text-muted);">No savings cycles recorded for this client.</p>';
+
+        var wrap = document.getElementById('inspectorLedgers');
+        wrap.innerHTML =
+          '<div class="inspector-section-block"><h4>Update Client Investments (' + (m.investments || []).length + ')</h4>' + invHtml + '</div>' +
+          '<div class="inspector-section-block"><h4>Update Client Savings (' + (m.savings || []).length + ')</h4>' + savHtml + '</div>' +
+          '<div class="inspector-section-block"><h4>Update Client Loans (' + (m.loans || []).length + ')</h4>' + loanHtml + '</div>' +
+          '<div class="inspector-section-block"><h4>Update Client Cycles (' + (m.cycles || []).length + ')</h4>' + cycHtml + '</div>';
+
+        // Bind Update / Delete handlers for client ledgers
+        var reloadInspector = function (msg) {
+          showToast(msg, false);
+          loadOverview();
+          inspectMemberByPhone(m.phone, true);
+        };
+
+        wrap.querySelectorAll('.insp-inv-save').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.closest('.inspector-record-card');
+            apiFetch('/api/admin/investments/' + encodeURIComponent(btn.getAttribute('data-id')), {
+              method: 'PUT',
+              body: JSON.stringify({
+                plan_name: row.querySelector('.insp-inv-plan').value.trim(),
+                amount: Number(row.querySelector('.insp-inv-amt').value || 0),
+                expected_return: Number(row.querySelector('.insp-inv-ret').value || 0),
+                duration: row.querySelector('.insp-inv-dur').value.trim(),
+                returns_date: row.querySelector('.insp-inv-date').value,
+                status: row.querySelector('.insp-inv-status').value
+              })
+            }).then(function () { reloadInspector('Client investment updated.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+        wrap.querySelectorAll('.insp-inv-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
+            apiFetch('/api/admin/investments/' + encodeURIComponent(btn.getAttribute('data-id')), { method: 'DELETE' })
+              .then(function () { reloadInspector('Investment deleted.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+
+        wrap.querySelectorAll('.insp-sav-save').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.closest('.inspector-record-card');
+            var acctType = row.querySelector('.insp-sav-type').value;
+            var reqStatus = row.querySelector('.insp-sav-status').value;
+            apiFetch('/api/admin/savings/' + encodeURIComponent(btn.getAttribute('data-id')), {
+              method: 'PUT',
+              body: JSON.stringify({
+                account_type: acctType,
+                balance: Number(row.querySelector('.insp-sav-bal').value || 0),
+                status: site.normalizeSavingsStatus(acctType, reqStatus)
+              })
+            }).then(function () { reloadInspector('Client savings account updated.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+        wrap.querySelectorAll('.insp-sav-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
+            apiFetch('/api/admin/savings/' + encodeURIComponent(btn.getAttribute('data-id')), { method: 'DELETE' })
+              .then(function () { reloadInspector('Savings account deleted.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+
+        wrap.querySelectorAll('.insp-loan-save').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.closest('.inspector-record-card');
+            apiFetch('/api/admin/loans/' + encodeURIComponent(btn.getAttribute('data-id')), {
+              method: 'PUT',
+              body: JSON.stringify({
+                amount: Number(row.querySelector('.insp-loan-amt').value || 0),
+                purpose: row.querySelector('.insp-loan-purpose').value.trim(),
+                duration: row.querySelector('.insp-loan-dur').value.trim(),
+                interest_rate: row.querySelector('.insp-loan-rate').value.trim(),
+                return_date: row.querySelector('.insp-loan-date').value,
+                status: row.querySelector('.insp-loan-status').value
+              })
+            }).then(function () { reloadInspector('Client loan & countdown updated.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+        wrap.querySelectorAll('.insp-loan-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
+            apiFetch('/api/admin/loans/' + encodeURIComponent(btn.getAttribute('data-id')), { method: 'DELETE' })
+              .then(function () { reloadInspector('Loan deleted.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+
+        wrap.querySelectorAll('.insp-cyc-save').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.closest('.inspector-record-card');
+            apiFetch('/api/admin/member-cycles/' + encodeURIComponent(btn.getAttribute('data-id')), {
+              method: 'PUT',
+              body: JSON.stringify({
+                cycle_name: row.querySelector('.insp-cyc-name').value.trim(),
+                contribution: Number(row.querySelector('.insp-cyc-contrib').value || 0),
+                payout_duration: row.querySelector('.insp-cyc-payout').value.trim(),
+                number_of_members: Number(row.querySelector('.insp-cyc-total').value || 10),
+                cycle_number: Number(row.querySelector('.insp-cyc-num').value || 1),
+                cycle_type: row.querySelector('.insp-cyc-type').value,
+                status: row.querySelector('.insp-cyc-status').value
+              })
+            }).then(function () { reloadInspector('Client cycle & turn number updated.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+        wrap.querySelectorAll('.insp-cyc-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
+            apiFetch('/api/admin/member-cycles/' + encodeURIComponent(btn.getAttribute('data-id')), { method: 'DELETE' })
+              .then(function () { reloadInspector('Cycle deleted.'); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+
+        if (!skipScroll) {
+          card.scrollIntoView({ behavior: 'smooth' });
+        }
       })
       .catch(function (e) { showToast(e.message, true); });
   }
@@ -635,13 +928,13 @@
           '<td class="tabular-nums">' + site.formatUGX(m.balance) + '</td>' +
           '<td class="tabular-nums">' + site.formatUGX(m.total_invested) + '</td>' +
           '<td>' + site.escapeHtml(m.status) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
-            '<button type="button" class="btn btn-outline btn-sm inspect-mem-btn" data-phone="' + site.escapeHtml(m.phone) + '">Inspect / Edit</button>' +
+          '<td><div class="table-actions">' +
+            '<button type="button" class="btn btn-outline btn-sm inspect-mem-btn" data-phone="' + site.escapeHtml(m.phone) + '">Update Client</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-mem-btn" data-id="' + m.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
-    }).join('') || '<tr><td colspan="7">No matching members found.</td></tr>';
+    }).join('') || '<tr><td colspan="7">No matching clients found.</td></tr>';
 
     tbody.querySelectorAll('.inspect-mem-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -653,7 +946,7 @@
       btn.addEventListener('click', function () {
         if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
         apiFetch('/api/admin/members/' + btn.getAttribute('data-id'), { method: 'DELETE' })
-          .then(function () { showToast('Member and all linked records deleted.', false); loadOverview(); })
+          .then(function () { showToast('Client and all linked records deleted.', false); loadOverview(); })
           .catch(function (e) { showToast(e.message, true); });
       });
     });
@@ -662,20 +955,23 @@
   function renderAdminLoans() {
     var tbody = document.getElementById('adminLoansTableBody');
     tbody.innerHTML = state.loans.map(function (l) {
+      var cd = site.computeLoanCountdown(l);
       return (
         '<tr>' +
           '<td>' + site.escapeHtml(l.member_name) + '</td>' +
           '<td class="font-mono-num">' + site.escapeHtml(l.member_phone) + '</td>' +
           '<td class="tabular-nums">' + site.formatUGX(l.amount) + '</td>' +
           '<td>' + site.escapeHtml(l.duration) + '</td>' +
+          '<td class="font-mono-num">' + site.escapeHtml(cd.returnDate || '--') + '</td>' +
+          '<td><span class="countdown-text countdown-' + cd.tone + '">' + site.escapeHtml(cd.label) + '</span></td>' +
           '<td>' + site.escapeHtml(l.status) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm mark-loan-paid-btn" data-id="' + l.id + '">Mark Paid</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-loan-btn" data-id="' + l.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
-    }).join('') || '<tr><td colspan="6">No member loans recorded yet.</td></tr>';
+    }).join('') || '<tr><td colspan="8">No client loans recorded yet.</td></tr>';
 
     tbody.querySelectorAll('.mark-loan-paid-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -709,10 +1005,10 @@
           '<td style="max-width:260px;font-size:0.82rem;">' + site.escapeHtml(r.details_json) + '</td>' +
           '<td>' + (r.age_confirmed ? 'Confirmed' : 'Pending') + (r.guardian_name ? ' (Guardian: ' + site.escapeHtml(r.guardian_name) + ')' : '') + '</td>' +
           '<td>' + site.escapeHtml(r.status) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
+          '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm req-approve-btn" data-id="' + r.id + '">Mark Reviewed</button>' +
             '<button type="button" class="btn btn-danger btn-sm req-del-btn" data-id="' + r.id + '">Delete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="8">No service requests received yet.</td></tr>';
@@ -748,10 +1044,10 @@
           '<td>' + site.escapeHtml(d.email || '--') + '</td>' +
           '<td>' + site.escapeHtml(d.reason || '--') + '</td>' +
           '<td>' + site.escapeHtml(d.status) + '</td>' +
-          '<td style="display:flex;gap:6px;">' +
-            '<button type="button" class="btn btn-danger btn-sm del-purge-btn" data-id="' + d.id + '">Purge Member Data</button>' +
+          '<td><div class="table-actions">' +
+            '<button type="button" class="btn btn-danger btn-sm del-purge-btn" data-id="' + d.id + '">Purge Client Data</button>' +
             '<button type="button" class="btn btn-outline btn-sm del-complete-btn" data-id="' + d.id + '">Complete</button>' +
-          '</td>' +
+          '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="7">No data deletion requests logged.</td></tr>';
@@ -762,7 +1058,7 @@
         apiFetch('/api/admin/deletion-requests/' + btn.getAttribute('data-id') + '/process', {
           method: 'POST',
           body: JSON.stringify({ action: 'purge' })
-        }).then(function () { showToast('Member records purged and request completed.', false); loadOverview(); })
+        }).then(function () { showToast('Client records purged and request completed.', false); loadOverview(); })
           .catch(function (e) { showToast(e.message, true); });
       });
     });
@@ -802,7 +1098,16 @@
       })
       .then(function (me) {
         if (me && me.admin) {
-          document.getElementById('secAdminEmail').value = me.admin.email || '';
+          state.currentAdminEmail = me.admin.email || '';
+          var secEmailEl = document.getElementById('secAdminEmail');
+          if (secEmailEl) {
+            secEmailEl.value = state.currentAdminEmail;
+            delete secEmailEl.dataset.userEdited;
+          }
+          var secNoteEl = document.getElementById('secCurrentAdminNote');
+          if (secNoteEl) {
+            secNoteEl.textContent = 'Currently signed in as: ' + (state.currentAdminEmail || 'Administrator');
+          }
         }
       })
       .catch(function (err) {
@@ -838,7 +1143,7 @@
     var fb = document.getElementById('adminLoginFeedback');
     fb.innerHTML = '';
 
-    fetch('/api/admin/login', {
+    site.apiFetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password })
@@ -1129,9 +1434,10 @@
   document.getElementById('updateMemberForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var id = document.getElementById('editMemId').value;
+    var updatedPhone = document.getElementById('editMemPhone').value;
     var payload = {
       name: document.getElementById('editMemName').value,
-      phone: document.getElementById('editMemPhone').value,
+      phone: updatedPhone,
       email: document.getElementById('editMemEmail').value,
       group_name: document.getElementById('editMemGroup').value,
       balance: Number(document.getElementById('editMemBalance').value),
@@ -1140,7 +1446,11 @@
       password: document.getElementById('editMemNewPass').value
     };
     apiFetch('/api/admin/members/' + id, { method: 'PUT', body: JSON.stringify(payload) })
-      .then(function () { showToast('Member record updated.', false); loadOverview(); })
+      .then(function () {
+        showToast('Client record updated.', false);
+        loadOverview();
+        inspectMemberByPhone(updatedPhone, true);
+      })
       .catch(function (err) { showToast(err.message, true); });
   });
 
@@ -1157,9 +1467,13 @@
     var customVal = document.getElementById('cmCycleCustom').value.trim();
     var invPlan = document.getElementById('cmInvPlan').value.trim();
     var invAmt = Number(document.getElementById('cmInvAmount').value || 0);
+    var invReturnsDateEl = document.getElementById('cmInvReturnsDate');
     var savType = document.getElementById('cmSavType').value;
     var loanAmt = Number(document.getElementById('cmLoanAmt').value || 0);
+    var loanReturnDateEl = document.getElementById('cmLoanReturnDate');
     var cycName = document.getElementById('cmCycleName').value.trim();
+    var cycNumberEl = document.getElementById('cmCycleNumber');
+    var cycTypeEl = document.getElementById('cmCycleType');
 
     var payload = {
       name: document.getElementById('cmName').value.trim(),
@@ -1173,24 +1487,29 @@
         plan_name: invPlan,
         amount: invAmt,
         expected_return: Number(document.getElementById('cmInvReturn').value || invAmt),
-        duration: document.getElementById('cmInvDuration').value.trim() || '30 Days'
+        duration: document.getElementById('cmInvDuration').value.trim() || '60 Days',
+        returns_date: invReturnsDateEl ? invReturnsDateEl.value : ''
       } : null,
       savings: savType ? {
         account_type: savType,
-        balance: Number(document.getElementById('cmSavBal').value || 0)
+        balance: Number(document.getElementById('cmSavBal').value || 0),
+        status: site.normalizeSavingsStatus(savType)
       } : null,
       loan: loanAmt > 0 ? {
         amount: loanAmt,
-        purpose: document.getElementById('cmLoanPurpose').value.trim() || 'Member Loan',
+        purpose: document.getElementById('cmLoanPurpose').value.trim() || 'Client Loan',
         duration: document.getElementById('cmLoanDur').value.trim() || '30 days',
         interest_rate: document.getElementById('cmLoanRate').value.trim() || '10%',
+        return_date: loanReturnDateEl ? loanReturnDateEl.value : '',
         status: 'active'
       } : null,
       cycle: cycName ? {
         cycle_name: cycName,
         contribution: Number(document.getElementById('cmCycleContrib').value || 0),
         payout_duration: payoutVal === 'Customize' && customVal ? customVal : payoutVal,
-        number_of_members: Number(document.getElementById('cmCycleMembers').value || 10)
+        number_of_members: Number(document.getElementById('cmCycleMembers').value || 10),
+        cycle_number: Number(cycNumberEl ? cycNumberEl.value || 1 : 1),
+        cycle_type: cycTypeEl ? cycTypeEl.value : 'public'
       } : null
     };
 
@@ -1198,7 +1517,7 @@
       .then(function () {
         document.getElementById('createMemberForm').reset();
         document.getElementById('cmCycleCustomWrap').style.display = 'none';
-        showToast('Member created with all linked investments, savings, loans, and cycles.', false);
+        showToast('Client created with all linked investments, savings, loans, and cycles.', false);
         loadOverview();
       })
       .catch(function (err) { showToast(err.message, true); });
@@ -1206,6 +1525,7 @@
 
   document.getElementById('addInvForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    var retDateEl = document.getElementById('fiInvReturnsDate');
     apiFetch('/api/admin/investments', {
       method: 'POST',
       body: JSON.stringify({
@@ -1214,34 +1534,38 @@
         plan_name: document.getElementById('fiInvPlan').value,
         amount: Number(document.getElementById('fiInvAmt').value),
         expected_return: Number(document.getElementById('fiInvRet').value),
-        duration: document.getElementById('fiInvDur').value
+        duration: document.getElementById('fiInvDur').value,
+        returns_date: retDateEl ? retDateEl.value : ''
       })
     }).then(function () {
       document.getElementById('addInvForm').reset();
-      showToast('Investment recorded and synced to member portal.', false);
+      showToast('Investment recorded and synced to client portal.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
   });
 
   document.getElementById('addSavForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    var acctType = document.getElementById('fiSavType').value;
     apiFetch('/api/admin/savings', {
       method: 'POST',
       body: JSON.stringify({
         member_phone: document.getElementById('fiSavPhone').value,
         member_name: document.getElementById('fiSavName').value,
-        account_type: document.getElementById('fiSavType').value,
-        balance: Number(document.getElementById('fiSavBal').value)
+        account_type: acctType,
+        balance: Number(document.getElementById('fiSavBal').value),
+        status: site.normalizeSavingsStatus(acctType)
       })
     }).then(function () {
       document.getElementById('addSavForm').reset();
-      showToast('Savings account recorded.', false);
+      showToast('Savings account recorded (Status: ' + site.normalizeSavingsStatus(acctType) + ').', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
   });
 
   document.getElementById('addLoanForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    var loanRetEl = document.getElementById('fiLoanReturnDate');
     apiFetch('/api/admin/loans', {
       method: 'POST',
       body: JSON.stringify({
@@ -1251,11 +1575,12 @@
         duration: document.getElementById('fiLoanDur').value,
         purpose: document.getElementById('fiLoanPurpose').value,
         interest_rate: document.getElementById('fiLoanRate').value,
+        return_date: loanRetEl ? loanRetEl.value : '',
         status: document.getElementById('fiLoanStatus').value
       })
     }).then(function () {
       document.getElementById('addLoanForm').reset();
-      showToast('Member loan recorded and visible in Client Portal.', false);
+      showToast('Client loan recorded with Returning Date & Daily Countdown.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
   });
@@ -1264,6 +1589,8 @@
     e.preventDefault();
     var pVal = document.getElementById('fiCycPayout').value;
     var cVal = document.getElementById('fiCycCustom').value.trim();
+    var cycNumEl = document.getElementById('fiCycNumber');
+    var cycTypeEl = document.getElementById('fiCycType');
     apiFetch('/api/admin/member-cycles', {
       method: 'POST',
       body: JSON.stringify({
@@ -1272,29 +1599,76 @@
         cycle_name: document.getElementById('fiCycTitle').value,
         contribution: Number(document.getElementById('fiCycContrib').value),
         number_of_members: Number(document.getElementById('fiCycMembers').value),
+        cycle_number: Number(cycNumEl ? cycNumEl.value || 1 : 1),
+        cycle_type: cycTypeEl ? cycTypeEl.value : 'public',
         payout_duration: pVal === 'Customize' && cVal ? cVal : pVal
       })
     }).then(function () {
       document.getElementById('addCycleForm').reset();
       document.getElementById('fiCycCustomWrap').style.display = 'none';
-      showToast('Member cycle recorded.', false);
+      showToast('Client cycle recorded with Cycle Number.', false);
       loadOverview();
     }).catch(function (err) { showToast(err.message, true); });
   });
 
+  var secEmailInput = document.getElementById('secAdminEmail');
+  if (secEmailInput) {
+    secEmailInput.addEventListener('input', function () {
+      secEmailInput.dataset.userEdited = '1';
+    });
+  }
+
+  var secPassToggleBtn = document.getElementById('secAdminPassToggle');
+  if (secPassToggleBtn) {
+    secPassToggleBtn.addEventListener('click', function () {
+      var pEl = document.getElementById('secAdminPass');
+      if (!pEl) return;
+      var show = pEl.type === 'password';
+      pEl.type = show ? 'text' : 'password';
+      secPassToggleBtn.textContent = show ? 'Hide' : 'Show';
+      secPassToggleBtn.setAttribute('aria-pressed', show ? 'true' : 'false');
+    });
+  }
+
   document.getElementById('adminSecurityForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    var newEmailVal = (document.getElementById('secAdminEmail').value || '').trim().toLowerCase();
+    var newPassVal = document.getElementById('secAdminPass').value || '';
+    if (newPassVal && newPassVal.length < 6) {
+      showToast('Password must be at least 6 characters.', true);
+      return;
+    }
+    if (!newPassVal && newEmailVal === String(state.currentAdminEmail || '').trim().toLowerCase()) {
+      showToast('Enter a new email address or a new password (min 6 characters) to update.', true);
+      return;
+    }
     apiFetch('/api/admin/change-password', {
       method: 'POST',
       body: JSON.stringify({
-        newEmail: document.getElementById('secAdminEmail').value,
-        newPassword: document.getElementById('secAdminPass').value
+        newEmail: newEmailVal,
+        newPassword: newPassVal
       })
-    }).then(function () {
+    }).then(function (res) {
       document.getElementById('secAdminPass').value = '';
+      if (res && res.email) {
+        state.currentAdminEmail = res.email;
+        document.getElementById('secAdminEmail').value = res.email;
+        delete document.getElementById('secAdminEmail').dataset.userEdited;
+        var secNoteEl = document.getElementById('secCurrentAdminNote');
+        if (secNoteEl) secNoteEl.textContent = 'Currently signed in as: ' + res.email;
+      }
       showToast('Administrator credentials updated.', false);
     }).catch(function (err) { showToast(err.message, true); });
   });
+
+  var verifyLiveSyncBtn = document.getElementById('verifyLiveSyncBtn');
+  if (verifyLiveSyncBtn) {
+    verifyLiveSyncBtn.addEventListener('click', function () {
+      renderDbConnectionBadge();
+      loadOverview();
+      showToast('Live Supabase & server status refreshed.', false);
+    });
+  }
 
   // Bind image upload inputs and live preview thumbnails
   bindImagePreview('setLogoUrl', 'setLogoPreview', 'assets/aistudio/logo2_be71428a.jpg');

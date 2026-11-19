@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Savings Cycles | SHIMOGY Investment Group Uganda</title>
-  <meta name="description" content="Join active community savings cycles or propose a new rotating group with custom member counts and payout durations at SHIMOGY Investment Group." />
+  <meta name="description" content="Join active community savings cycles or propose a new rotating group with custom client counts and payout durations at SHIMOGY Investment Group." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="theme-color" content="#0A192F" />
@@ -181,7 +181,9 @@
     </section>
 
     <!-- How Cycles Work -->
-    <section class="section section-subtle" aria-labelledby="howCyclesHeading">
+    <section class="section section-photo-band" aria-labelledby="howCyclesHeading">
+      <img src="assets/aistudio/transport_459a1a5e.jpg" alt="" class="section-photo-bg" aria-hidden="true" />
+      <div class="section-photo-scrim" aria-hidden="true"></div>
       <div class="container">
         <div class="section-heading">
           <span class="eyebrow-text">Cycle Mechanics</span>
@@ -208,7 +210,7 @@
           <article class="numbered-card">
             <span class="step-index">04</span>
             <h3>Scheduled Group Payout</h3>
-            <p>Each member receives their pooled disbursement according to the agreed cycle rotation schedule.</p>
+            <p>Each client receives their pooled disbursement according to the agreed cycle rotation schedule.</p>
           </article>
         </div>
       </div>
@@ -218,20 +220,24 @@
     <section class="section" aria-labelledby="proposeCycleHeading">
       <div class="container">
         <div class="two-col-grid">
-          <div>
-            <span class="eyebrow-text">Custom Group Setup</span>
-            <h2 id="proposeCycleHeading" style="font-size:2rem;margin-bottom:12px;">Propose a New Cycle</h2>
-            <p style="font-size:1.02rem;color:var(--navy-900);font-weight:600;margin-bottom:14px;">
-              Operations team will review and activate your cycle in less than 24hrs
-            </p>
-            <p style="color:var(--text-secondary);margin-bottom:20px;">
-              Organize a savings circle with colleagues, family members, or business associates. Specify your preferred contribution amount, total number of members, and payout frequency below.
-            </p>
-            <ul class="clean-list">
-              <li>Daily, Weekly, Monthly, or Custom payout schedules supported</li>
-              <li>Digital tracking per member in the SHIMOGY Client Portal</li>
-              <li>Clear rules documented before group launch</li>
-            </ul>
+          <div class="div-photo-shell">
+            <img src="assets/aistudio/saloon_90076cb0.jpg" alt="" class="div-photo-bg" aria-hidden="true" />
+            <div class="div-photo-scrim" aria-hidden="true"></div>
+            <div class="div-photo-inner">
+              <span class="eyebrow-text">Custom Group Setup</span>
+              <h2 id="proposeCycleHeading" style="font-size:2rem;margin-bottom:12px;">Propose a New Cycle</h2>
+              <p style="font-size:1.02rem;color:var(--text-heading);font-weight:600;margin-bottom:14px;">
+                Operations team will review and activate your cycle in less than 24hrs
+              </p>
+              <p style="color:var(--text-secondary);margin-bottom:20px;">
+                Organize a savings circle with colleagues, family members, or business associates. Specify your preferred contribution amount, total number of clients, and payout frequency below.
+              </p>
+              <ul class="clean-list">
+                <li>Daily, Weekly, Monthly, or Custom payout schedules supported</li>
+                <li>Digital tracking per client in the SHIMOGY Client Portal</li>
+                <li>Clear rules documented before group launch</li>
+              </ul>
+            </div>
           </div>
 
           <div class="form-card">
@@ -255,7 +261,7 @@
                   <input type="number" id="propContribution" min="1000" required placeholder="e.g., 10000" />
                 </div>
                 <div class="form-field">
-                  <label for="propMembersCount">Number of members</label>
+                  <label for="propMembersCount">Number of clients</label>
                   <input type="number" id="propMembersCount" min="2" max="200" required placeholder="e.g., 10" />
                 </div>
               </div>
@@ -357,7 +363,7 @@
             <li><a href="investments.html">Investment Plans</a></li>
             <li><a href="cycles.html">Savings Cycles</a></li>
             <li><a href="savings.html">Savings Accounts</a></li>
-            <li><a href="loans.html">Member Loans</a></li>
+            <li><a href="loans.html">Client Loans</a></li>
             <li><a href="updates.html">News &amp; Updates</a></li>
             <li><a href="dashboard.html">Client Portal</a></li>
           </ul>
@@ -405,6 +411,7 @@
   </div>
 
   <script src="js/firebase-bridge.js"></script>
+  <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>
@@ -481,7 +488,7 @@
         var guardian = document.getElementById('joinGuardian').value.trim();
         var fb = document.getElementById('joinCycleFeedback');
 
-        fetch('/api/requests', {
+        site.apiFetch('/api/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -532,7 +539,7 @@
         var ageConfirmed = document.getElementById('propAgeCheck').checked;
         var fb = document.getElementById('proposeFeedback');
 
-        fetch('/api/requests', {
+        site.apiFetch('/api/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -560,7 +567,7 @@
               'Phone: ' + phone + '\n' +
               'Cycle Name: ' + cycleName + '\n' +
               'Contribution: ' + site.formatUGX(contribution) + '\n' +
-              'Number of members: ' + membersCount + '\n' +
+              'Number of clients: ' + membersCount + '\n' +
               'Pay out duration: ' + payoutDuration;
             var waUrl = site.triggerWhatsApp(whatsappNum, waText);
             fb.innerHTML =

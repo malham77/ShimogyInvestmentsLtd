@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>News &amp; Updates | SHIMOGY Investment Group Uganda</title>
-  <meta name="description" content="Official company announcements, savings tips, member stories, and upcoming events from SHIMOGY Investment Group in Kampala, Uganda." />
+  <meta name="description" content="Official company announcements, savings tips, client stories, and upcoming events from SHIMOGY Investment Group in Kampala, Uganda." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="theme-color" content="#0A192F" />
@@ -170,7 +170,7 @@
       <div class="container">
         <span class="eyebrow-text">SHIMOGY Editorial Bulletin · <span id="todayDateLabel"></span></span>
         <h1>News &amp; Updates</h1>
-        <p>Official company bulletins, member stories, financial guidance, and cycle announcements from Kawempe Tula, Kampala.</p>
+        <p>Official company bulletins, client stories, financial guidance, and cycle announcements from Kawempe Tula, Kampala.</p>
       </div>
     </section>
 
@@ -182,6 +182,7 @@
             <div class="section-label">Top Story</div>
             <div class="hero-story" id="heroStory">
               <button type="button" class="hero-main" id="heroMain" aria-label="Open top story details">
+                <img id="heroMainImg" src="assets/aistudio/graph_ddbd7244.jpg" alt="" class="hero-card-img" aria-hidden="true" />
                 <div class="hero-overlay">
                   <span class="story-tag tag-news" id="heroTag">NEWS</span>
                   <h2 id="heroTitle">Loading latest bulletin...</h2>
@@ -257,7 +258,7 @@
                 <li><a href="investments.html" class="sidebar-link-item">Investment Plans &rarr;</a></li>
                 <li><a href="cycles.html" class="sidebar-link-item">Savings Cycles &rarr;</a></li>
                 <li><a href="savings.html" class="sidebar-link-item">Open Savings Account &rarr;</a></li>
-                <li><a href="loans.html" class="sidebar-link-item">Apply for Member Loan &rarr;</a></li>
+                <li><a href="loans.html" class="sidebar-link-item">Apply for Client Loan &rarr;</a></li>
                 <li><a href="dashboard.html" class="sidebar-link-item">Client Portal &rarr;</a></li>
               </ul>
             </div>
@@ -324,7 +325,7 @@
             <li><a href="investments.html">Investment Plans</a></li>
             <li><a href="cycles.html">Savings Cycles</a></li>
             <li><a href="savings.html">Savings Accounts</a></li>
-            <li><a href="loans.html">Member Loans</a></li>
+            <li><a href="loans.html">Client Loans</a></li>
             <li><a href="updates.html">News &amp; Updates</a></li>
             <li><a href="dashboard.html">Client Portal</a></li>
           </ul>
@@ -370,6 +371,7 @@
   </div>
 
   <script src="js/firebase-bridge.js"></script>
+  <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
   <script>
@@ -418,7 +420,7 @@
           return;
         }
         if (!allUpdates.length) {
-          el.textContent = 'Welcome to SHIMOGY Investment Group Ltd — Latest member stories, community savings updates, and verified venture openings in Kampala.';
+          el.textContent = 'Welcome to SHIMOGY Investment Group Ltd — Latest client stories, community savings updates, and verified venture openings in Kampala.';
           return;
         }
         var items = allUpdates.slice(0, 10).map(function (u) {
@@ -453,7 +455,12 @@
 
         heroStory.style.display = 'grid';
         var lead = list[0];
-        heroMain.style.backgroundImage = "url('" + site.assetUrl(lead.image_url) + "')";
+        var leadImgEl = document.getElementById('heroMainImg');
+        if (leadImgEl) {
+          leadImgEl.classList.remove('is-img-loaded');
+          leadImgEl.setAttribute('src', site.assetUrl(lead.image_url));
+          leadImgEl.setAttribute('alt', lead.image_alt || lead.title || '');
+        }
         heroMain.onclick = function () { openStoryDetail(lead); };
         var hTag = document.getElementById('heroTag');
         hTag.textContent = (lead.category || 'news').toUpperCase();
@@ -464,7 +471,8 @@
         var sideStories = list.slice(1, 4);
         heroSide.innerHTML = sideStories.map(function (s, idx) {
           return (
-            '<button type="button" class="hero-side-card" data-side-idx="' + idx + '" style="background-image:url(\'' + site.escapeHtml(site.assetUrl(s.image_url)) + '\');">' +
+            '<button type="button" class="hero-side-card" data-side-idx="' + idx + '">' +
+              '<img src="' + site.escapeHtml(site.assetUrl(s.image_url)) + '" alt="' + site.escapeHtml(s.image_alt || s.title) + '" class="hero-card-img" loading="lazy" />' +
               '<div class="side-overlay">' +
                 '<span class="story-tag ' + tagClass(s.category) + '">' + site.escapeHtml((s.category || 'news').toUpperCase()) + '</span>' +
                 '<h3>' + site.escapeHtml(s.title) + '</h3>' +

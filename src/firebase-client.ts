@@ -192,6 +192,49 @@ function todayISO(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+function addDaysToISO(baseDateStr: string, daysToAdd: number): string {
+  const clean = String(baseDateStr || '').slice(0, 10);
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T00:00:00Z') : new Date();
+  if (Number.isNaN(base.getTime())) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + daysToAdd);
+    return d.toISOString().split('T')[0];
+  }
+  base.setUTCDate(base.getUTCDate() + daysToAdd);
+  return base.toISOString().split('T')[0];
+}
+
+function parseDurationDays(durationText: string, fallbackDays = 30): number {
+  const s = String(durationText || '').toLowerCase();
+  const numMatch = s.match(/(\d+)/);
+  const num = numMatch ? Number(numMatch[1]) : 0;
+  if (s.includes('year')) return (num || 1) * 365;
+  if (s.includes('month')) return (num || 1) * 30;
+  if (s.includes('week') || s.includes('bi-week')) return s.includes('bi-week') ? 14 : (num || 1) * 7;
+  if (s.includes('daily')) return 1;
+  if (num > 0) return num;
+  return fallbackDays;
+}
+
+function computeReturnsDate(startDate: string, duration: string, explicitDate?: unknown): string {
+  const given = String(explicitDate || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+  return addDaysToISO(startDate || todayISO(), parseDurationDays(duration, 60));
+}
+
+function computeLoanReturnDate(requestDate: string, duration: string, explicitDate?: unknown): string {
+  const given = String(explicitDate || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+  return addDaysToISO(requestDate || todayISO(), parseDurationDays(duration, 30));
+}
+
+function normalizeSavingsStatus(accountType: string, requestedStatus?: unknown): string {
+  const raw = String(requestedStatus || '').trim().toLowerCase();
+  if (raw === 'suspended' || raw === 'closed') return String(requestedStatus);
+  if (String(accountType || '').toLowerCase().includes('fixed')) return 'Locked';
+  return 'Available';
+}
+
 function formatTs(ts: unknown): string {
   if (!ts) return todayISO();
   if (typeof ts === 'string') return ts;
@@ -500,6 +543,8 @@ async function seedCloudFromLocalDefaults(): Promise<void> {
 function mapLedgerDocToLegacy(docSnapId: string, d: Record<string, unknown>) {
   const rt = String(d.record_type);
   if (rt === 'investment') {
+    const dur = String(d.duration || '60 Days');
+    const createdAt = String(d.date_str || formatTs(d.createdAt));
     return {
       id: docSnapId,
       member_id: d.memberId,
@@ -508,25 +553,29 @@ function mapLedgerDocToLegacy(docSnapId: string, d: Record<string, unknown>) {
       plan_name: d.title || '',
       amount: Number(d.amount || 0),
       expected_return: Number(d.expected_return || 0),
-      duration: d.duration || '60 Days',
+      duration: dur,
+      returns_date: computeReturnsDate(createdAt, dur, d.returns_date),
       status: d.status || 'active',
-      created_at: d.date_str || formatTs(d.createdAt)
+      created_at: createdAt
     };
   }
   if (rt === 'savings') {
+    const acctType = String(d.title || 'Current Account');
     return {
       id: docSnapId,
       member_id: d.memberId,
       member_phone: d.member_phone || '',
       member_name: d.member_name || '',
-      account_type: d.title || 'Current Account',
+      account_type: acctType,
       balance: Number(d.amount || 0),
       open_date: d.date_str || todayISO(),
-      status: d.status || 'active',
+      status: normalizeSavingsStatus(acctType, d.status),
       created_at: formatTs(d.createdAt)
     };
   }
   if (rt === 'loan') {
+    const dur = String(d.duration || '30 days');
+    const reqDate = String(d.date_str || todayISO());
     return {
       id: docSnapId,
       member_id: d.memberId,
@@ -534,10 +583,11 @@ function mapLedgerDocToLegacy(docSnapId: string, d: Record<string, unknown>) {
       member_name: d.member_name || '',
       amount: Number(d.amount || 0),
       purpose: d.purpose || d.title || '',
-      duration: d.duration || '30 days',
+      duration: dur,
       interest_rate: d.interest_rate || '10%',
       status: d.status || 'active',
-      request_date: d.date_str || todayISO(),
+      request_date: reqDate,
+      return_date: computeLoanReturnDate(reqDate, dur, d.return_date),
       created_at: formatTs(d.createdAt)
     };
   }
@@ -550,6 +600,8 @@ function mapLedgerDocToLegacy(docSnapId: string, d: Record<string, unknown>) {
     contribution: Number(d.amount || 0),
     payout_duration: d.duration || 'Weekly',
     number_of_members: Number(d.number_of_members || 10),
+    cycle_number: Number(d.cycle_number || 1),
+    cycle_type: String(d.cycle_type || 'public'),
     join_date: d.date_str || todayISO(),
     status: d.status || 'active',
     created_at: formatTs(d.createdAt)
@@ -574,32 +626,39 @@ async function rebuildMemberPortalSnapshot(memberId: string): Promise<void> {
     const ld = docItem.data() as Record<string, unknown>;
     const rt = String(ld.record_type);
     if (rt === 'investment' && investments.length < 50) {
+      const dur = String(ld.duration || '60 Days');
+      const dt = String(ld.date_str || formatTs(ld.createdAt));
       investments.push({
         id: docItem.id,
         plan_name: String(ld.title || ''),
         amount: Number(ld.amount || 0),
         expected_return: Number(ld.expected_return || 0),
-        duration: String(ld.duration || '60 Days'),
+        duration: dur,
+        returns_date: computeReturnsDate(dt, dur, ld.returns_date),
         status: String(ld.status || 'active'),
-        created_at: String(ld.date_str || formatTs(ld.createdAt))
+        created_at: dt
       });
     } else if (rt === 'savings' && savings.length < 50) {
+      const acctType = String(ld.title || 'Current Account');
       savings.push({
         id: docItem.id,
-        account_type: String(ld.title || 'Current Account'),
+        account_type: acctType,
         balance: Number(ld.amount || 0),
         open_date: String(ld.date_str || todayISO()),
-        status: String(ld.status || 'active')
+        status: normalizeSavingsStatus(acctType, ld.status)
       });
     } else if (rt === 'loan' && loans.length < 50) {
+      const dur = String(ld.duration || '30 days');
+      const reqDt = String(ld.date_str || todayISO());
       loans.push({
         id: docItem.id,
         amount: Number(ld.amount || 0),
         purpose: String(ld.purpose || ld.title || ''),
-        duration: String(ld.duration || '30 days'),
+        duration: dur,
         interest_rate: String(ld.interest_rate || '10%'),
         status: String(ld.status || 'active'),
-        request_date: String(ld.date_str || todayISO())
+        request_date: reqDt,
+        return_date: computeLoanReturnDate(reqDt, dur, ld.return_date)
       });
     } else if (rt === 'cycle' && cycles.length < 50) {
       cycles.push({
@@ -608,6 +667,8 @@ async function rebuildMemberPortalSnapshot(memberId: string): Promise<void> {
         contribution: Number(ld.amount || 0),
         payout_duration: String(ld.duration || 'Weekly'),
         number_of_members: Number(ld.number_of_members || 10),
+        cycle_number: Number(ld.cycle_number || 1),
+        cycle_type: String(ld.cycle_type || 'public'),
         join_date: String(ld.date_str || todayISO()),
         status: String(ld.status || 'active')
       });
@@ -616,7 +677,7 @@ async function rebuildMemberPortalSnapshot(memberId: string): Promise<void> {
 
   await setDoc(doc(db, 'member_portals', credHash), {
     memberId: memberId,
-    display_name: String(m.name || 'Member'),
+    display_name: String(m.name || 'Client'),
     group_name: String(m.group_name || ''),
     balance: Number(m.balance || 0),
     total_invested: Number(m.total_invested || 0),
@@ -1316,6 +1377,7 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
           amount: invAmt,
           expected_return: invRet,
           duration: invDur,
+          returns_date: computeReturnsDate(todayISO(), invDur, nestedInv?.returns_date),
           date_str: todayISO(),
           status: 'active',
           createdAt: serverTimestamp(),
@@ -1333,7 +1395,7 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
           title: savType,
           amount: savBal,
           date_str: todayISO(),
-          status: 'active',
+          status: normalizeSavingsStatus(savType, nestedSav?.status),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -1352,12 +1414,16 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
           interest_rate: loanRate,
           purpose: loanPurpose,
           date_str: todayISO(),
+          return_date: computeLoanReturnDate(todayISO(), loanDur, nestedLoan?.return_date),
           status: loanStatus,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       }
       if (cycName && cycContrib > 0) {
+        const totMems = Math.max(2, cycMembers);
+        const cycNum = Math.min(totMems, Math.max(1, Number(nestedCycle?.cycle_number ?? 1)));
+        const cycType = String(nestedCycle?.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public';
         await setDoc(doc(db, 'member_ledgers', makeDocId('mcyc')), {
           memberId: memId,
           member_phone: phone,
@@ -1368,7 +1434,9 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
           title: cycName,
           amount: cycContrib,
           duration: cycPayout,
-          number_of_members: cycMembers,
+          number_of_members: totMems,
+          cycle_number: cycNum,
+          cycle_type: cycType,
           date_str: todayISO(),
           status: 'active',
           createdAt: serverTimestamp(),
@@ -1502,22 +1570,24 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
 
     if (pathOnly === '/api/admin/investments' && method === 'POST') {
       const mDoc = await findMemberByPhone(String(body.member_phone || ''));
-      if (!mDoc) return { status: 404, data: { error: 'No registered member found with that phone number. Create the member first.' } };
+      if (!mDoc) return { status: 404, data: { error: 'No registered client found with that phone number. Create the client first.' } };
       const m = mDoc.data() as Record<string, unknown>;
-      const amt = Number(body.amount || 0);
+      const amt = Math.max(0, Number(body.amount || 0));
+      const dur = String(body.duration || '60 Days');
       await setDoc(doc(db, 'member_ledgers', makeDocId('inv')), {
         memberId: mDoc.id,
         member_phone: String(m.phone || ''),
         member_email: String(m.email || ''),
-        member_name: String(body.member_name || m.name || 'Member'),
+        member_name: String(body.member_name || m.name || 'Client'),
         ownerUid: String(m.uid || ''),
         record_type: 'investment',
         title: String(body.plan_name || ''),
         amount: amt,
-        expected_return: Number(body.expected_return || amt),
-        duration: String(body.duration || '60 Days'),
+        expected_return: Math.max(0, Number(body.expected_return || amt)),
+        duration: dur,
+        returns_date: computeReturnsDate(todayISO(), dur, body.returns_date),
         date_str: todayISO(),
-        status: 'active',
+        status: String(body.status || 'active'),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -1530,22 +1600,53 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
       return { status: 201, data: { success: true } };
     }
 
+    const mInvEdit = pathOnly.match(/^\/api\/admin\/investments\/([a-zA-Z0-9_\-]+)$/);
+    if (mInvEdit) {
+      const iRef = doc(db, 'member_ledgers', mInvEdit[1]);
+      const iSnap = await getDoc(iRef);
+      if (iSnap.exists()) {
+        const ld = iSnap.data() as Record<string, unknown>;
+        if (method === 'PUT') {
+          const dur = String(body.duration ?? ld.duration ?? '60 Days');
+          await setDoc(iRef, {
+            ...ld,
+            title: String(body.plan_name ?? ld.title ?? ''),
+            amount: Math.max(0, Number(body.amount ?? ld.amount ?? 0)),
+            expected_return: Math.max(0, Number(body.expected_return ?? ld.expected_return ?? 0)),
+            duration: dur,
+            returns_date: computeReturnsDate(String(ld.date_str || todayISO()), dur, body.returns_date ?? ld.returns_date),
+            status: String(body.status ?? ld.status ?? 'active'),
+            updatedAt: serverTimestamp()
+          });
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+        if (method === 'DELETE') {
+          await deleteDoc(iRef);
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+      }
+      return { status: 200, data: { success: true } };
+    }
+
     if (pathOnly === '/api/admin/savings' && method === 'POST') {
       const mDoc = await findMemberByPhone(String(body.member_phone || ''));
-      if (!mDoc) return { status: 404, data: { error: 'No registered member found with that phone number.' } };
+      if (!mDoc) return { status: 404, data: { error: 'No registered client found with that phone number.' } };
       const m = mDoc.data() as Record<string, unknown>;
-      const bal = Number(body.balance || 0);
+      const bal = Math.max(0, Number(body.balance || 0));
+      const acctType = String(body.account_type || 'Current Account');
       await setDoc(doc(db, 'member_ledgers', makeDocId('sav')), {
         memberId: mDoc.id,
         member_phone: String(m.phone || ''),
         member_email: String(m.email || ''),
-        member_name: String(body.member_name || m.name || 'Member'),
+        member_name: String(body.member_name || m.name || 'Client'),
         ownerUid: String(m.uid || ''),
         record_type: 'savings',
-        title: String(body.account_type || 'Current Account'),
+        title: acctType,
         amount: bal,
         date_str: todayISO(),
-        status: 'active',
+        status: normalizeSavingsStatus(acctType, body.status),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -1558,23 +1659,53 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
       return { status: 201, data: { success: true } };
     }
 
+    const mSavEdit = pathOnly.match(/^\/api\/admin\/savings\/([a-zA-Z0-9_\-]+)$/);
+    if (mSavEdit) {
+      const sRef = doc(db, 'member_ledgers', mSavEdit[1]);
+      const sSnap = await getDoc(sRef);
+      if (sSnap.exists()) {
+        const ld = sSnap.data() as Record<string, unknown>;
+        if (method === 'PUT') {
+          const acctType = String(body.account_type ?? ld.title ?? 'Current Account');
+          await setDoc(sRef, {
+            ...ld,
+            title: acctType,
+            amount: Math.max(0, Number(body.balance ?? ld.amount ?? 0)),
+            status: normalizeSavingsStatus(acctType, body.status ?? ld.status),
+            updatedAt: serverTimestamp()
+          });
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+        if (method === 'DELETE') {
+          await deleteDoc(sRef);
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+      }
+      return { status: 200, data: { success: true } };
+    }
+
     if (pathOnly === '/api/admin/loans' && method === 'POST') {
       const mDoc = await findMemberByPhone(String(body.member_phone || ''));
-      if (!mDoc) return { status: 404, data: { error: 'No registered member found with that phone number.' } };
+      if (!mDoc) return { status: 404, data: { error: 'No registered client found with that phone number.' } };
       const m = mDoc.data() as Record<string, unknown>;
+      const dur = String(body.duration || '30 days');
+      const reqDt = String(body.request_date || todayISO());
       await setDoc(doc(db, 'member_ledgers', makeDocId('loan')), {
         memberId: mDoc.id,
         member_phone: String(m.phone || ''),
         member_email: String(m.email || ''),
-        member_name: String(body.member_name || m.name || 'Member'),
+        member_name: String(body.member_name || m.name || 'Client'),
         ownerUid: String(m.uid || ''),
         record_type: 'loan',
-        title: String(body.purpose || 'Member Loan'),
-        amount: Number(body.amount || 0),
-        duration: String(body.duration || '30 days'),
+        title: String(body.purpose || 'Client Loan'),
+        amount: Math.max(0, Number(body.amount || 0)),
+        duration: dur,
         interest_rate: String(body.interest_rate || '10%'),
-        purpose: String(body.purpose || 'Member Loan'),
-        date_str: todayISO(),
+        purpose: String(body.purpose || 'Client Loan'),
+        date_str: reqDt,
+        return_date: computeLoanReturnDate(reqDt, dur, body.return_date),
         status: String(body.status || 'active'),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -1590,7 +1721,19 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
       if (lSnap.exists()) {
         const ld = lSnap.data() as Record<string, unknown>;
         if (method === 'PUT') {
-          await setDoc(lRef, { ...ld, status: String(body.status || 'paid'), updatedAt: serverTimestamp() });
+          const dur = String(body.duration ?? ld.duration ?? '30 days');
+          const reqDt = String(ld.date_str || todayISO());
+          await setDoc(lRef, {
+            ...ld,
+            amount: Math.max(0, Number(body.amount ?? ld.amount ?? 0)),
+            purpose: String(body.purpose ?? ld.purpose ?? ''),
+            title: String(body.purpose ?? ld.title ?? 'Client Loan'),
+            duration: dur,
+            interest_rate: String(body.interest_rate ?? ld.interest_rate ?? '10%'),
+            return_date: computeLoanReturnDate(reqDt, dur, body.return_date ?? ld.return_date),
+            status: String(body.status ?? ld.status ?? 'paid'),
+            updatedAt: serverTimestamp()
+          });
           await rebuildMemberPortalSnapshot(String(ld.memberId));
           return { status: 200, data: { success: true } };
         }
@@ -1605,26 +1748,60 @@ async function handleAdminApi(pathOnly: string, method: string, body: Record<str
 
     if (pathOnly === '/api/admin/member-cycles' && method === 'POST') {
       const mDoc = await findMemberByPhone(String(body.member_phone || ''));
-      if (!mDoc) return { status: 404, data: { error: 'No registered member found with that phone number.' } };
+      if (!mDoc) return { status: 404, data: { error: 'No registered client found with that phone number.' } };
       const m = mDoc.data() as Record<string, unknown>;
+      const totM = Math.max(2, Number(body.number_of_members || 10));
       await setDoc(doc(db, 'member_ledgers', makeDocId('mcyc')), {
         memberId: mDoc.id,
         member_phone: String(m.phone || ''),
         member_email: String(m.email || ''),
-        member_name: String(body.member_name || m.name || 'Member'),
+        member_name: String(body.member_name || m.name || 'Client'),
         ownerUid: String(m.uid || ''),
         record_type: 'cycle',
         title: String(body.cycle_name || ''),
-        amount: Number(body.contribution || 0),
+        amount: Math.max(0, Number(body.contribution || 0)),
         duration: String(body.payout_duration || 'Weekly'),
-        number_of_members: Number(body.number_of_members || 10),
+        number_of_members: totM,
+        cycle_number: Math.min(totM, Math.max(1, Number(body.cycle_number || 1))),
+        cycle_type: String(body.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
         date_str: todayISO(),
-        status: 'active',
+        status: String(body.status || 'active'),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       await rebuildMemberPortalSnapshot(mDoc.id);
       return { status: 201, data: { success: true } };
+    }
+
+    const mCycEdit = pathOnly.match(/^\/api\/admin\/member-cycles\/([a-zA-Z0-9_\-]+)$/);
+    if (mCycEdit) {
+      const cRef = doc(db, 'member_ledgers', mCycEdit[1]);
+      const cSnap = await getDoc(cRef);
+      if (cSnap.exists()) {
+        const ld = cSnap.data() as Record<string, unknown>;
+        if (method === 'PUT') {
+          const totM = Math.max(2, Number(body.number_of_members ?? ld.number_of_members ?? 10));
+          await setDoc(cRef, {
+            ...ld,
+            title: String(body.cycle_name ?? ld.title ?? ''),
+            amount: Math.max(0, Number(body.contribution ?? ld.amount ?? 0)),
+            duration: String(body.payout_duration ?? ld.duration ?? 'Weekly'),
+            number_of_members: totM,
+            cycle_number: Math.min(totM, Math.max(1, Number(body.cycle_number ?? ld.cycle_number ?? 1))),
+            cycle_type: String(body.cycle_type ?? ld.cycle_type ?? 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
+            status: String(body.status ?? ld.status ?? 'active'),
+            updatedAt: serverTimestamp()
+          });
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+        if (method === 'DELETE') {
+          await deleteDoc(cRef);
+          await rebuildMemberPortalSnapshot(String(ld.memberId));
+          return { status: 200, data: { success: true } };
+        }
+      }
+      return { status: 200, data: { success: true } };
     }
 
     const mReq = pathOnly.match(/^\/api\/admin\/requests\/([a-zA-Z0-9_\-]+)$/);

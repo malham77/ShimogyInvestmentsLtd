@@ -29,6 +29,8 @@
 
   function statusClass(status) {
     var s = String(status || '').toLowerCase();
+    if (s === 'available') return 'status-available';
+    if (s === 'locked') return 'status-locked';
     if (s === 'active' || s === 'approved' || s === 'completed' || s === 'paid') return 'status-active';
     if (s === 'pending' || s === 'review') return 'status-pending';
     return 'status-closed';
@@ -159,7 +161,7 @@
     portalSec.style.display = 'block';
     document.getElementById('memberLogoutBtn').style.display = 'inline-flex';
 
-    document.getElementById('portalWelcomeTitle').textContent = 'Welcome, ' + (m.name || 'Member');
+    document.getElementById('portalWelcomeTitle').textContent = 'Welcome, ' + (m.name || 'Client');
     document.getElementById('portalMemberMeta').textContent =
       'Registered Phone: ' + (m.phone || '--') +
       (m.group_name ? ' · Primary Group: ' + m.group_name : '') +
@@ -183,12 +185,13 @@
 
     renderMemberCharts(investments, savings, loans, cycles, displayBalance, totalInvested);
 
-    // Investments Table
+    // Investments Table (Returns Date)
     var invBody = document.getElementById('memberInvestmentsBody');
     if (!investments.length) {
       invBody.innerHTML = '<tr><td colspan="6">No investment plans recorded yet.</td></tr>';
     } else {
       invBody.innerHTML = investments.map(function (inv) {
+        var retDate = site.computeReturnsDate(inv);
         return (
           '<tr>' +
             '<td><strong>' + site.escapeHtml(inv.plan_name || 'Investment Plan') + '</strong></td>' +
@@ -196,64 +199,128 @@
             '<td class="tabular-nums">' + site.formatUGX(inv.expected_return) + '</td>' +
             '<td>' + site.escapeHtml(inv.duration || '--') + '</td>' +
             '<td><span class="status-text ' + statusClass(inv.status) + '">' + site.escapeHtml(inv.status || 'active') + '</span></td>' +
-            '<td>' + site.escapeHtml((inv.created_at || '').slice(0, 10) || '--') + '</td>' +
+            '<td class="font-mono-num">' + site.escapeHtml(retDate || '--') + '</td>' +
           '</tr>'
         );
       }).join('');
     }
 
-    // Savings Table
+    // Savings Table (Fixed -> Locked, Current -> Available)
     var savBody = document.getElementById('memberSavingsBody');
     if (!savings.length) {
       savBody.innerHTML = '<tr><td colspan="4">No savings accounts recorded yet.</td></tr>';
     } else {
       savBody.innerHTML = savings.map(function (sv) {
+        var normStatus = site.normalizeSavingsStatus(sv.account_type, sv.status);
         return (
           '<tr>' +
             '<td><strong>' + site.escapeHtml(sv.account_type || 'Current Account') + '</strong></td>' +
             '<td class="tabular-nums">' + site.formatUGX(sv.balance) + '</td>' +
-            '<td>' + site.escapeHtml(sv.open_date || '--') + '</td>' +
-            '<td><span class="status-text ' + statusClass(sv.status) + '">' + site.escapeHtml(sv.status || 'active') + '</span></td>' +
+            '<td class="font-mono-num">' + site.escapeHtml(sv.open_date || '--') + '</td>' +
+            '<td><span class="status-text ' + statusClass(normStatus) + '">' + site.escapeHtml(normStatus) + '</span></td>' +
           '</tr>'
         );
       }).join('');
     }
 
-    // Loans Table
+    // Loans Table (Returning Date & Daily Countdown)
     var loanBody = document.getElementById('memberLoansBody');
     if (!loans.length) {
-      loanBody.innerHTML = '<tr><td colspan="6">No loans on record for your account.</td></tr>';
+      loanBody.innerHTML = '<tr><td colspan="7">No loans on record for your account.</td></tr>';
     } else {
       loanBody.innerHTML = loans.map(function (ln) {
+        var cd = site.computeLoanCountdown(ln);
         return (
           '<tr>' +
             '<td class="tabular-nums"><strong>' + site.formatUGX(ln.amount) + '</strong></td>' +
-            '<td>' + site.escapeHtml(ln.purpose || 'Member Loan') + '</td>' +
+            '<td>' + site.escapeHtml(ln.purpose || 'Client Loan') + '</td>' +
             '<td>' + site.escapeHtml(ln.duration || '--') + '</td>' +
             '<td>' + site.escapeHtml(ln.interest_rate || '10%') + '</td>' +
+            '<td class="font-mono-num">' + site.escapeHtml(cd.returnDate || '--') + '</td>' +
+            '<td><span class="countdown-text countdown-' + cd.tone + '">' + site.escapeHtml(cd.label) + '</span></td>' +
             '<td><span class="status-text ' + statusClass(ln.status) + '">' + site.escapeHtml(ln.status || 'pending') + '</span></td>' +
-            '<td>' + site.escapeHtml(ln.request_date || '--') + '</td>' +
           '</tr>'
         );
       }).join('');
     }
 
-    // Cycles Table
+    // Cycles Table (My Cycle Number + Exit/Stop Actions)
     var cycBody = document.getElementById('memberCyclesBody');
     if (!cycles.length) {
-      cycBody.innerHTML = '<tr><td colspan="5">You are not enrolled in any savings cycles yet.</td></tr>';
+      cycBody.innerHTML = '<tr><td colspan="7">You are not enrolled in any savings cycles yet.</td></tr>';
     } else {
       cycBody.innerHTML = cycles.map(function (cy) {
+        var turnState = site.computeCycleTurnState(cy);
+        var isClosed = turnState.status === 'exited' || turnState.status === 'stopped' || turnState.status === 'completed';
+        var actType = turnState.cycleType === 'custom' ? 'stop' : 'exit';
+        var actLabel = turnState.cycleType === 'custom' ? 'Stop Cycle' : 'Exit Cycle';
+        var actionHtml = isClosed
+          ? '<span style="color:var(--text-muted);font-size:0.8rem;">No action</span>'
+          : '<button type="button" class="btn btn-danger btn-sm client-cycle-action-btn" data-id="' +
+              site.escapeHtml(cy.id) +
+              '" data-action="' +
+              actType +
+              '">' +
+              actLabel +
+            '</button>';
+
         return (
           '<tr>' +
-            '<td><strong>' + site.escapeHtml(cy.cycle_name) + '</strong></td>' +
+            '<td><strong>' + site.escapeHtml(cy.cycle_name) + '</strong><div style="font-size:0.75rem;color:var(--text-muted);">' + (turnState.cycleType === 'custom' ? 'Custom Cycle' : 'Public Cycle') + '</div></td>' +
             '<td class="tabular-nums">' + site.formatUGX(cy.contribution) + '</td>' +
             '<td>' + site.escapeHtml(cy.payout_duration || 'Monthly') + '</td>' +
-            '<td class="tabular-nums">' + site.escapeHtml(cy.number_of_members || '--') + '</td>' +
+            '<td class="tabular-nums">' + site.escapeHtml(turnState.totalClients) + '</td>' +
+            '<td><span class="cycle-turn-main">' + site.escapeHtml(turnState.label) + '</span><span class="cycle-turn-sub">' + site.escapeHtml(turnState.subLabel) + '</span></td>' +
             '<td><span class="status-text ' + statusClass(cy.status) + '">' + site.escapeHtml(cy.status || 'active') + '</span></td>' +
+            '<td>' + actionHtml + '</td>' +
           '</tr>'
         );
       }).join('');
+
+      cycBody.querySelectorAll('.client-cycle-action-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var cid = btn.getAttribute('data-id');
+          var act = btn.getAttribute('data-action');
+          var fb = document.getElementById('memberCycleFeedback');
+          if (!btn.dataset.confirmed) {
+            btn.dataset.confirmed = '1';
+            btn.textContent = act === 'stop' ? 'Confirm Stop?' : 'Confirm Exit?';
+            setTimeout(function () {
+              if (btn && btn.dataset) {
+                delete btn.dataset.confirmed;
+                btn.textContent = act === 'stop' ? 'Stop Cycle' : 'Exit Cycle';
+              }
+            }, 4000);
+            return;
+          }
+          btn.disabled = true;
+          site.apiFetch('/api/member/cycles/' + encodeURIComponent(cid) + '/action', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + getToken()
+            },
+            body: JSON.stringify({ action: act })
+          })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+              if (!res.ok) {
+                if (fb) fb.innerHTML = '<div class="alert-box alert-error">' + site.escapeHtml(res.data.error || 'Unable to update cycle.') + '</div>';
+                return;
+              }
+              if (fb) {
+                fb.innerHTML = '<div class="alert-box alert-success">' + (act === 'stop' ? 'Custom cycle stopped successfully.' : 'Exited public cycle successfully.') + '</div>';
+              }
+              loadMemberProfile();
+            })
+            .catch(function () {
+              if (fb) fb.innerHTML = '<div class="alert-box alert-error">Network error updating cycle.</div>';
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        });
+      });
     }
 
     site.observeReveals(portalSec);
@@ -273,7 +340,7 @@
       showLogin();
       return;
     }
-    fetch('/api/member/me', {
+    site.apiFetch('/api/member/me', {
       headers: { Authorization: 'Bearer ' + token }
     })
       .then(function (r) {
@@ -296,7 +363,7 @@
     var fb = document.getElementById('memberLoginFeedback');
     fb.innerHTML = '';
 
-    fetch('/api/member/login', {
+    site.apiFetch('/api/member/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: phone, password: password })
@@ -340,16 +407,27 @@
     });
   }
 
-  document.getElementById('memberLogoutBtn').addEventListener('click', function () {
+  function handleSignOutToMainSite() {
     var token = getToken();
+    setToken('');
+    var finish = function () {
+      window.location.href = 'index.html';
+    };
+    var ops = [];
     if (token) {
-      fetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
+      ops.push(site.apiFetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {}));
     }
     if (window.ShimogyCloud && typeof window.ShimogyCloud.signOutCloud === 'function') {
-      window.ShimogyCloud.signOutCloud().catch(function () {});
+      ops.push(window.ShimogyCloud.signOutCloud().catch(function () {}));
     }
-    showLogin();
-  });
+    Promise.all(ops).then(finish, finish);
+  }
+
+  document.getElementById('memberLogoutBtn').addEventListener('click', handleSignOutToMainSite);
+  var portalSignOutBtn = document.getElementById('portalSignOutBtn');
+  if (portalSignOutBtn) {
+    portalSignOutBtn.addEventListener('click', handleSignOutToMainSite);
+  }
 
   document.getElementById('refreshPortalBtn').addEventListener('click', loadMemberProfile);
 
@@ -380,7 +458,7 @@
       return;
     }
 
-    fetch('/api/member/change-password', {
+    site.apiFetch('/api/member/change-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -408,7 +486,7 @@
     var reason = document.getElementById('memDelReason').value.trim();
     var fb = document.getElementById('memDelFeedback');
 
-    fetch('/api/deletion-requests', {
+    site.apiFetch('/api/deletion-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
