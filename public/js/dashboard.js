@@ -32,8 +32,18 @@
     if (s === 'available') return 'status-available';
     if (s === 'locked') return 'status-locked';
     if (s === 'active' || s === 'approved' || s === 'completed' || s === 'paid') return 'status-active';
-    if (s === 'pending' || s === 'review') return 'status-pending';
+    if (s === 'pending' || s === 'review' || s === 'exit_pending') return 'status-pending';
     return 'status-closed';
+  }
+
+  function formatCycleStatusLabel(status) {
+    var s = String(status || 'active').toLowerCase();
+    if (s === 'exit_pending') return 'Exit Pending';
+    if (s === 'active') return 'Active';
+    if (s === 'exited') return 'Exited';
+    if (s === 'stopped') return 'Stopped';
+    if (s === 'completed') return 'Completed';
+    return status || 'Active';
   }
 
   function renderMemberCharts(investments, savings, loans, cycles, displayBalance, totalInvested) {
@@ -171,6 +181,9 @@
     var savings = m.savings || [];
     var loans = m.loans || [];
     var cycles = m.cycles || [];
+    var notifications = m.notifications || [];
+
+    renderNotifications(notifications);
 
     var totalInvested = investments.reduce(function (acc, i) { return acc + Number(i.amount || 0); }, 0);
     if (!totalInvested && Number(m.total_invested) > 0) totalInvested = Number(m.total_invested);
@@ -244,34 +257,50 @@
       }).join('');
     }
 
-    // Cycles Table (My Cycle Number + Exit/Stop Actions)
+    // Cycles Table (Shared Co-Clients + My Cycle Number + Exit Approval Flow)
     var cycBody = document.getElementById('memberCyclesBody');
     if (!cycles.length) {
-      cycBody.innerHTML = '<tr><td colspan="7">You are not enrolled in any savings cycles yet.</td></tr>';
+      cycBody.innerHTML = '<tr><td colspan="8">You are not enrolled in any savings cycles yet.</td></tr>';
     } else {
       cycBody.innerHTML = cycles.map(function (cy) {
         var turnState = site.computeCycleTurnState(cy);
         var isClosed = turnState.status === 'exited' || turnState.status === 'stopped' || turnState.status === 'completed';
+        var isExitPending = turnState.status === 'exit_pending';
         var actType = turnState.cycleType === 'custom' ? 'stop' : 'exit';
         var actLabel = turnState.cycleType === 'custom' ? 'Stop Cycle' : 'Exit Cycle';
-        var actionHtml = isClosed
-          ? '<span style="color:var(--text-muted);font-size:0.8rem;">No action</span>'
-          : '<button type="button" class="btn btn-danger btn-sm client-cycle-action-btn" data-id="' +
-              site.escapeHtml(cy.id) +
-              '" data-action="' +
-              actType +
-              '">' +
-              actLabel +
-            '</button>';
+
+        var coList = Array.isArray(cy.co_members) ? cy.co_members : [];
+        var coHtml = coList.length
+          ? '<div class="shared-clients-cell">' +
+              '<span class="shared-clients-names">' + coList.map(function (n) { return site.escapeHtml(n); }).join(', ') + '</span>' +
+              '<span class="shared-clients-meta">' + coList.length + ' other client' + (coList.length === 1 ? '' : 's') + '</span>' +
+            '</div>'
+          : '<span style="color:var(--text-muted);font-size:0.82rem;">No other clients yet</span>';
+
+        var actionHtml;
+        if (isClosed) {
+          actionHtml = '<span style="color:var(--text-muted);font-size:0.8rem;">No action</span>';
+        } else if (isExitPending) {
+          actionHtml = '<span class="status-text status-pending" style="font-size:0.8rem;">Awaiting Admin Approval</span>';
+        } else {
+          actionHtml = '<button type="button" class="btn btn-danger btn-sm client-cycle-action-btn" data-id="' +
+            site.escapeHtml(cy.id) +
+            '" data-action="' +
+            actType +
+            '">' +
+            actLabel +
+          '</button>';
+        }
 
         return (
           '<tr>' +
             '<td><strong>' + site.escapeHtml(cy.cycle_name) + '</strong><div style="font-size:0.75rem;color:var(--text-muted);">' + (turnState.cycleType === 'custom' ? 'Custom Cycle' : 'Public Cycle') + '</div></td>' +
+            '<td>' + coHtml + '</td>' +
             '<td class="tabular-nums">' + site.formatUGX(cy.contribution) + '</td>' +
             '<td>' + site.escapeHtml(cy.payout_duration || 'Monthly') + '</td>' +
             '<td class="tabular-nums">' + site.escapeHtml(turnState.totalClients) + '</td>' +
             '<td><span class="cycle-turn-main">' + site.escapeHtml(turnState.label) + '</span><span class="cycle-turn-sub">' + site.escapeHtml(turnState.subLabel) + '</span></td>' +
-            '<td><span class="status-text ' + statusClass(cy.status) + '">' + site.escapeHtml(cy.status || 'active') + '</span></td>' +
+            '<td><span class="status-text ' + statusClass(cy.status) + '">' + site.escapeHtml(formatCycleStatusLabel(cy.status)) + '</span></td>' +
             '<td>' + actionHtml + '</td>' +
           '</tr>'
         );
@@ -284,7 +313,7 @@
           var fb = document.getElementById('memberCycleFeedback');
           if (!btn.dataset.confirmed) {
             btn.dataset.confirmed = '1';
-            btn.textContent = act === 'stop' ? 'Confirm Stop?' : 'Confirm Exit?';
+            btn.textContent = act === 'stop' ? 'Confirm Stop?' : 'Request Exit?';
             setTimeout(function () {
               if (btn && btn.dataset) {
                 delete btn.dataset.confirmed;
@@ -309,7 +338,10 @@
                 return;
               }
               if (fb) {
-                fb.innerHTML = '<div class="alert-box alert-success">' + (act === 'stop' ? 'Custom cycle stopped successfully.' : 'Exited public cycle successfully.') + '</div>';
+                var defaultMsg = act === 'stop'
+                  ? 'Custom cycle updated.'
+                  : 'Cycle exit request sent for admin approval.';
+                fb.innerHTML = '<div class="alert-box alert-success">' + site.escapeHtml((res.data && res.data.message) || defaultMsg) + '</div>';
               }
               loadMemberProfile();
             })
@@ -326,6 +358,61 @@
     site.observeReveals(portalSec);
   }
 
+  function renderNotifications(notifications) {
+    var sec = document.getElementById('memberNotificationsSection');
+    var listEl = document.getElementById('memberNotificationsList');
+    var markAllBtn = document.getElementById('markAllNotifsReadBtn');
+    if (!sec || !listEl) return;
+
+    var unread = (notifications || []).filter(function (n) { return !Number(n.is_read); });
+    if (!unread.length) {
+      sec.style.display = 'none';
+      listEl.innerHTML = '';
+      if (markAllBtn) markAllBtn.style.display = 'none';
+      return;
+    }
+
+    sec.style.display = 'block';
+    if (markAllBtn) {
+      markAllBtn.style.display = unread.length > 1 ? 'inline-flex' : 'none';
+      markAllBtn.onclick = function () {
+        markAllBtn.disabled = true;
+        site.apiFetch('/api/member/notifications/read-all', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + getToken() }
+        })
+          .then(function () { loadMemberProfile(); })
+          .finally(function () { markAllBtn.disabled = false; });
+      };
+    }
+
+    listEl.innerHTML = unread.map(function (n) {
+      return (
+        '<div class="notif-item">' +
+          '<div class="notif-body">' +
+            '<div class="notif-title">' + site.escapeHtml(n.title || 'Cycle Notification') + '</div>' +
+            '<div class="notif-message">' + site.escapeHtml(n.message || '') + '</div>' +
+            '<div class="notif-meta">' + site.escapeHtml(String(n.created_at || '').slice(0, 16)) + '</div>' +
+          '</div>' +
+          '<button type="button" class="btn btn-outline btn-sm dismiss-notif-btn" data-id="' + site.escapeHtml(n.id) + '">Dismiss</button>' +
+        '</div>'
+      );
+    }).join('');
+
+    listEl.querySelectorAll('.dismiss-notif-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var nid = btn.getAttribute('data-id');
+        btn.disabled = true;
+        site.apiFetch('/api/member/notifications/' + encodeURIComponent(nid) + '/read', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + getToken() }
+        })
+          .then(function () { loadMemberProfile(); })
+          .catch(function () { btn.disabled = false; });
+      });
+    });
+  }
+
   function showLogin() {
     currentMember = null;
     setToken('');
@@ -336,6 +423,10 @@
 
   function loadMemberProfile() {
     var token = getToken();
+    if (token && window.location.protocol !== 'file:' && token.indexOf('cloud_') === 0) {
+      setToken('');
+      token = '';
+    }
     if (!token) {
       showLogin();
       return;
@@ -549,7 +640,8 @@
 
   window.addEventListener('shimogy:cloud-auth', function (e) {
     var detail = (e && e.detail) || {};
-    if (detail.user && !detail.isAdmin && !getToken() && window.ShimogyCloud) {
+    var curToken = getToken();
+    if (detail.user && !detail.isAdmin && (!curToken || curToken.indexOf('cloud_') === 0) && window.ShimogyCloud) {
       if (window.location.protocol !== 'file:' && typeof window.ShimogyCloud.getIdToken === 'function') {
         window.ShimogyCloud.getIdToken()
           .then(function (idToken) { return idToken ? exchangeMemberGoogleToken(idToken) : null; })
@@ -563,7 +655,7 @@
           .catch(function () {});
         return;
       }
-      if (typeof window.ShimogyCloud.fetchMemberSessionFromCloud === 'function') {
+      if (window.location.protocol === 'file:' && typeof window.ShimogyCloud.fetchMemberSessionFromCloud === 'function') {
         var cloudToken = 'cloud_mem_uid_' + detail.user.uid;
         window.ShimogyCloud.fetchMemberSessionFromCloud(cloudToken).then(function (res) {
           if (res && res.member) {

@@ -204,17 +204,47 @@ class SqliteRunner implements DbRunner {
   }
 }
 
+function isTransientPgError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | undefined;
+  const code = String(e?.code || '');
+  const msg = String(e?.message || '');
+  return (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'EPIPE' ||
+    code === '57P01' ||
+    code === '57P02' ||
+    code === '57P03' ||
+    code === '08000' ||
+    code === '08003' ||
+    code === '08006' ||
+    /connection terminated|connection reset|timeout|encountered a connection error|socket hang up/i.test(msg)
+  );
+}
+
 class PgRunner implements DbRunner {
   private client: Pool | PoolClient;
-  constructor(client: Pool | PoolClient) {
+  private canRetry: boolean;
+  constructor(client: Pool | PoolClient, canRetry = false) {
     this.client = client;
+    this.canRetry = canRetry;
+  }
+  private async execQuery(sql: string, params: unknown[]) {
+    try {
+      return await this.client.query(sql, params);
+    } catch (err) {
+      if (this.canRetry && isTransientPgError(err)) {
+        return await this.client.query(sql, params);
+      }
+      throw err;
+    }
   }
   async all<T = Record<string, any>>(sql: string, params: unknown[] = []): Promise<T[]> {
-    const res = await this.client.query(toPgPlaceholders(sql), params);
+    const res = await this.execQuery(toPgPlaceholders(sql), params);
     return res.rows as T[];
   }
   async get<T = Record<string, any>>(sql: string, params: unknown[] = []): Promise<T | undefined> {
-    const res = await this.client.query(toPgPlaceholders(sql), params);
+    const res = await this.execQuery(toPgPlaceholders(sql), params);
     return res.rows[0] as T | undefined;
   }
   async run(sql: string, params: unknown[] = []): Promise<{ lastInsertRowid: number; changes: number }> {
@@ -225,7 +255,7 @@ class PgRunner implements DbRunner {
     if (isInsert && !tablesWithoutId) {
       pgSql += ' RETURNING id';
     }
-    const res = await this.client.query(pgSql, params);
+    const res = await this.execQuery(pgSql, params);
     const insertedId = res.rows && res.rows[0] && res.rows[0].id !== undefined ? Number(res.rows[0].id) : 0;
     return { lastInsertRowid: insertedId, changes: Number(res.rowCount || 0) };
   }
@@ -421,6 +451,33 @@ CREATE TABLE IF NOT EXISTS media_files (
   data BYTEA NOT NULL,
   created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
 );
+
+CREATE TABLE IF NOT EXISTS cycle_exit_requests (
+  id BIGSERIAL PRIMARY KEY,
+  member_cycle_id BIGINT NOT NULL,
+  member_id BIGINT,
+  member_phone TEXT NOT NULL,
+  member_name TEXT NOT NULL,
+  cycle_name TEXT NOT NULL,
+  cycle_type TEXT NOT NULL DEFAULT 'public',
+  action_type TEXT NOT NULL DEFAULT 'exit',
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS'),
+  processed_at TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS client_notifications (
+  id BIGSERIAL PRIMARY KEY,
+  member_id BIGINT,
+  member_phone TEXT NOT NULL,
+  notif_type TEXT NOT NULL DEFAULT 'cycle_exit',
+  cycle_name TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
+);
 `;
 
 export const PG_RLS_SQL = `
@@ -441,6 +498,8 @@ ALTER TABLE member_cycles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE service_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deletion_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cycle_exit_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_notifications ENABLE ROW LEVEL SECURITY;
 
 -- Public Catalog Read-Only Policies (for static Cloudflare Pages / REST reads)
 DROP POLICY IF EXISTS "Public read site_settings" ON site_settings;
@@ -508,6 +567,8 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS service_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, request_type TEXT NOT NULL, applicant_name TEXT NOT NULL, applicant_phone TEXT NOT NULL, details_json TEXT NOT NULL, age_confirmed INTEGER NOT NULL DEFAULT 1, guardian_name TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS deletion_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', requested_at TEXT DEFAULT (datetime('now')), processed_at TEXT DEFAULT '');
       CREATE TABLE IF NOT EXISTS media_files (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, mime_type TEXT NOT NULL, data BLOB NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+      CREATE TABLE IF NOT EXISTS cycle_exit_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, member_cycle_id INTEGER NOT NULL, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, cycle_name TEXT NOT NULL, cycle_type TEXT NOT NULL DEFAULT 'public', action_type TEXT NOT NULL DEFAULT 'exit', reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), processed_at TEXT DEFAULT '');
+      CREATE TABLE IF NOT EXISTS client_notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, notif_type TEXT NOT NULL DEFAULT 'cycle_exit', cycle_name TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')));
     `);
 
     this.ensureSqliteColumn('investments', 'returns_date', "TEXT NOT NULL DEFAULT ''");
@@ -554,10 +615,10 @@ export class DatabaseManager {
       email: 'shimogygroup@gmail.com',
       address: 'Kawempe Tula, Kampala, Uganda',
       working_hours: 'Monday - Saturday: 8:00 AM - 6:00 PM EAT (Sunday: Closed)',
-      social_facebook: 'https://www.facebook.com',
-      social_tiktok: 'https://www.tiktok.com',
-      social_youtube: 'https://www.youtube.com',
-      social_instagram: 'https://www.instagram.com',
+      social_facebook: 'https://www.facebook.com/share/r/1CR2Q4xdwC/',
+      social_tiktok: 'https://tiktok.com/@shimogygroup.com',
+      social_youtube: 'https://youtube.com/@shimogygroup',
+      social_instagram: 'https://www.instagram.com/shimogygroup',
       logo_url: '/assets/aistudio/logo2_be71428a.jpg',
       about_mission: 'To offer smart and profitable investment opportunities with simplified financial solutions to all our local and international clients.',
       about_vision: 'To lead a positive financial transformation through smart investments and simplified financial solutions across the globe.',
@@ -575,6 +636,10 @@ export class DatabaseManager {
       upsertSetting.run(k, v);
     }
     this.sqliteDb.prepare("UPDATE site_settings SET value = '/assets/aistudio/logo2_be71428a.jpg' WHERE key = 'logo_url' AND value = '/assets/aistudio/logobg_263a028d.png'").run();
+    this.sqliteDb.prepare("UPDATE site_settings SET value = 'https://www.facebook.com/share/r/1CR2Q4xdwC/' WHERE key = 'social_facebook' AND (value = '' OR value = 'https://www.facebook.com')").run();
+    this.sqliteDb.prepare("UPDATE site_settings SET value = 'https://tiktok.com/@shimogygroup.com' WHERE key = 'social_tiktok' AND (value = '' OR value = 'https://www.tiktok.com')").run();
+    this.sqliteDb.prepare("UPDATE site_settings SET value = 'https://youtube.com/@shimogygroup' WHERE key = 'social_youtube' AND (value = '' OR value = 'https://www.youtube.com')").run();
+    this.sqliteDb.prepare("UPDATE site_settings SET value = 'https://www.instagram.com/shimogygroup' WHERE key = 'social_instagram' AND (value = '' OR value = 'https://www.instagram.com')").run();
 
     const defaultPass = process.env.ADMIN_PASSWORD || 'shimogy123';
     const insertAdminIgnore = this.sqliteDb.prepare('INSERT OR IGNORE INTO admin_users (email, name, password_hash) VALUES (?, ?, ?)');
@@ -664,8 +729,13 @@ export class DatabaseManager {
         connectionString: pgUrl,
         ssl: { rejectUnauthorized: false },
         max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000
+        idleTimeoutMillis: 20000,
+        connectionTimeoutMillis: 12000,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000
+      });
+      pool.on('error', (err) => {
+        console.warn('PostgreSQL idle pool client error:', err?.message || err);
       });
       await pool.query('SELECT 1');
       await pool.query(PG_SCHEMA_SQL);
@@ -681,9 +751,25 @@ export class DatabaseManager {
         await this.migrateSqliteToPostgres(pool);
       }
 
+      // Idempotently replace generic placeholder social links in live Postgres site_settings
+      const officialSocials: [string, string, string][] = [
+        ['social_facebook', 'https://www.facebook.com/share/r/1CR2Q4xdwC/', 'https://www.facebook.com'],
+        ['social_tiktok', 'https://tiktok.com/@shimogygroup.com', 'https://www.tiktok.com'],
+        ['social_youtube', 'https://youtube.com/@shimogygroup', 'https://www.youtube.com'],
+        ['social_instagram', 'https://www.instagram.com/shimogygroup', 'https://www.instagram.com']
+      ];
+      for (const [k, nextVal, legacyVal] of officialSocials) {
+        await pool.query(
+          `INSERT INTO site_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+           WHERE site_settings.value = '' OR site_settings.value = $3`,
+          [k, nextVal, legacyVal]
+        );
+      }
+
       this.pgPool = pool;
       this.mode = 'postgres';
-      this.rootRunner = new PgRunner(pool);
+      this.rootRunner = new PgRunner(pool, true);
       console.log('Connected to Supabase PostgreSQL database.');
     } catch (err) {
       console.warn('Supabase PostgreSQL connection unavailable; falling back to local SQLite:', err instanceof Error ? err.message : err);
@@ -707,7 +793,9 @@ export class DatabaseManager {
       { name: 'loans', cols: ['id', 'member_id', 'member_phone', 'member_name', 'amount', 'purpose', 'duration', 'interest_rate', 'status', 'request_date', 'return_date', 'created_at'], hasId: true },
       { name: 'member_cycles', cols: ['id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'contribution', 'payout_duration', 'number_of_members', 'cycle_number', 'cycle_type', 'join_date', 'status', 'created_at'], hasId: true },
       { name: 'service_requests', cols: ['id', 'request_type', 'applicant_name', 'applicant_phone', 'details_json', 'age_confirmed', 'guardian_name', 'status', 'created_at'], hasId: true },
-      { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true }
+      { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true },
+      { name: 'cycle_exit_requests', cols: ['id', 'member_cycle_id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'cycle_type', 'action_type', 'reason', 'status', 'created_at', 'processed_at'], hasId: true },
+      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true }
     ];
 
     const client = await pool.connect();
@@ -748,17 +836,28 @@ export class DatabaseManager {
 
   public async transaction<T>(fn: (runner: DbRunner) => Promise<T>): Promise<T> {
     if (this.mode === 'postgres' && this.pgPool) {
-      const client = await this.pgPool.connect();
-      try {
-        await client.query('BEGIN');
-        const result = await fn(new PgRunner(client));
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const client = await this.pgPool.connect();
+        let broken = false;
+        try {
+          await client.query('BEGIN');
+          const result = await fn(new PgRunner(client, false));
+          await client.query('COMMIT');
+          return result;
+        } catch (err) {
+          broken = isTransientPgError(err);
+          try {
+            await client.query('ROLLBACK');
+          } catch {
+            broken = true;
+          }
+          if (attempt === 0 && broken) {
+            continue;
+          }
+          throw err;
+        } finally {
+          client.release(broken);
+        }
       }
     }
 
@@ -820,7 +919,9 @@ export class DatabaseManager {
       { name: 'loans', cols: ['id', 'member_id', 'member_phone', 'member_name', 'amount', 'purpose', 'duration', 'interest_rate', 'status', 'request_date', 'return_date', 'created_at'], hasId: true },
       { name: 'member_cycles', cols: ['id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'contribution', 'payout_duration', 'number_of_members', 'cycle_number', 'cycle_type', 'join_date', 'status', 'created_at'], hasId: true },
       { name: 'service_requests', cols: ['id', 'request_type', 'applicant_name', 'applicant_phone', 'details_json', 'age_confirmed', 'guardian_name', 'status', 'created_at'], hasId: true },
-      { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true }
+      { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true },
+      { name: 'cycle_exit_requests', cols: ['id', 'member_cycle_id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'cycle_type', 'action_type', 'reason', 'status', 'created_at', 'processed_at'], hasId: true },
+      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true }
     ];
 
     for (const t of exportTables) {

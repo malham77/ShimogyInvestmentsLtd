@@ -23,7 +23,8 @@
     heroSlides: [],
     testimonials: [],
     requests: [],
-    deletionRequests: []
+    deletionRequests: [],
+    cycleExitRequests: []
   };
 
   function getToken() {
@@ -388,29 +389,12 @@
     if (mode === 'postgres') {
       badge.className = 'countdown-text countdown-ok';
       badge.textContent = 'Connected Live to Supabase PostgreSQL';
-    } else if (window.ShimogySupabase && typeof window.ShimogySupabase.getPublicSiteData === 'function') {
-      badge.className = 'countdown-text countdown-ok';
-      badge.textContent = 'Operations Server Active · Checking Supabase REST...';
-      window.ShimogySupabase.getPublicSiteData()
-        .then(function (sbData) {
-          if (!badge) return;
-          if (sbData && sbData.source === 'supabase') {
-            badge.className = 'countdown-text countdown-ok';
-            badge.textContent = 'Live Supabase REST Connected · Operations Server Active';
-          } else {
-            badge.className = 'countdown-text countdown-warn';
-            badge.textContent = 'Operations Database Active (Local Sync)';
-          }
-        })
-        .catch(function () {
-          if (badge) {
-            badge.className = 'countdown-text countdown-warn';
-            badge.textContent = 'Operations Database Active';
-          }
-        });
+    } else if (window.location.protocol !== 'file:') {
+      badge.className = 'countdown-text countdown-danger';
+      badge.textContent = 'Server Not Linked to Supabase PostgreSQL (Configure DATABASE_URL)';
     } else {
       badge.className = 'countdown-text countdown-neutral';
-      badge.textContent = 'Live Workspace Active';
+      badge.textContent = 'Offline Workspace Mode';
     }
   }
 
@@ -419,8 +403,29 @@
     document.getElementById('ovMembersCount').textContent = String(state.members.length);
     document.getElementById('ovPlansCount').textContent = String(state.plans.length);
     document.getElementById('ovCyclesCount').textContent = String(state.publicCycles.length);
-    var pending = state.requests.filter(function (r) { return r.status === 'pending'; }).length;
-    document.getElementById('ovPendingReqCount').textContent = String(pending);
+    var pendingReqs = state.requests.filter(function (r) { return r.status === 'pending'; }).length;
+    var pendingExits = (state.cycleExitRequests || []).filter(function (e) { return e.status === 'pending'; }).length;
+    document.getElementById('ovPendingReqCount').textContent = String(pendingReqs + pendingExits);
+
+    var exitAlertWrap = document.getElementById('ovExitAlertWrap');
+    if (exitAlertWrap) {
+      if (pendingExits > 0) {
+        exitAlertWrap.innerHTML =
+          '<div class="alert-box alert-info" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">' +
+            '<span><strong>' + pendingExits + ' Cycle Exit Request' + (pendingExits === 1 ? '' : 's') + '</strong> awaiting admin approval.</span>' +
+            '<button type="button" id="ovReviewExitsBtn" class="btn btn-primary btn-sm">Review Cycle Exits</button>' +
+          '</div>';
+        var revBtn = document.getElementById('ovReviewExitsBtn');
+        if (revBtn) {
+          revBtn.addEventListener('click', function () {
+            var navBtn = document.querySelector('.sidebar-link[data-tab="tab-requests"]');
+            if (navBtn) navBtn.click();
+          });
+        }
+      } else {
+        exitAlertWrap.innerHTML = '';
+      }
+    }
 
     renderDbConnectionBadge();
     renderOverviewCharts();
@@ -823,6 +828,7 @@
                 '<div class="form-field" style="margin-bottom:0;"><label>Status</label>' +
                   '<select class="insp-cyc-status">' +
                     '<option value="active"' + (st === 'active' ? ' selected' : '') + '>Active</option>' +
+                    '<option value="exit_pending"' + (st === 'exit_pending' ? ' selected' : '') + '>Exit Pending Approval</option>' +
                     '<option value="exited"' + (st === 'exited' ? ' selected' : '') + '>Exited</option>' +
                     '<option value="stopped"' + (st === 'stopped' ? ' selected' : '') + '>Stopped</option>' +
                     '<option value="completed"' + (st === 'completed' ? ' selected' : '') + '>Completed</option>' +
@@ -1082,6 +1088,80 @@
     });
   }
 
+  function renderCycleExitRequests() {
+    var tbody = document.getElementById('cycleExitRequestsTableBody');
+    if (!tbody) return;
+    var list = state.cycleExitRequests || [];
+    tbody.innerHTML = list.map(function (ex) {
+      var st = String(ex.status || 'pending').toLowerCase();
+      var actionsHtml = st === 'pending'
+        ? '<div class="table-actions">' +
+            '<button type="button" class="btn btn-primary btn-sm exit-approve-btn" data-id="' + site.escapeHtml(ex.id) + '">Accept Exit</button>' +
+            '<button type="button" class="btn btn-danger btn-sm exit-decline-btn" data-id="' + site.escapeHtml(ex.id) + '">Decline</button>' +
+          '</div>'
+        : '<span style="color:var(--text-muted);font-size:0.82rem;">Processed ' + site.escapeHtml(String(ex.processed_at || '').slice(0, 10)) + '</span>';
+
+      return (
+        '<tr>' +
+          '<td class="tabular-nums">#' + site.escapeHtml(ex.id) + '</td>' +
+          '<td><strong>' + site.escapeHtml(ex.member_name) + '</strong></td>' +
+          '<td class="font-mono-num">' + site.escapeHtml(ex.member_phone) + '</td>' +
+          '<td><strong>' + site.escapeHtml(ex.cycle_name) + '</strong></td>' +
+          '<td>' + site.escapeHtml(String(ex.cycle_type || 'public').toUpperCase()) + '</td>' +
+          '<td class="font-mono-num">' + site.escapeHtml(String(ex.created_at || '').slice(0, 16)) + '</td>' +
+          '<td><span class="status-text ' + (st === 'approved' ? 'status-active' : (st === 'pending' ? 'status-pending' : 'status-closed')) + '">' + site.escapeHtml(st) + '</span></td>' +
+          '<td>' + actionsHtml + '</td>' +
+        '</tr>'
+      );
+    }).join('') || '<tr><td colspan="8">No cycle exit requests submitted yet.</td></tr>';
+
+    tbody.querySelectorAll('.exit-approve-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!btn.dataset.confirmed) {
+          btn.dataset.confirmed = '1';
+          btn.textContent = 'Confirm Accept?';
+          return;
+        }
+        btn.disabled = true;
+        apiFetch('/api/admin/cycle-exit-requests/' + encodeURIComponent(btn.getAttribute('data-id')) + '/process', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'approve' })
+        })
+          .then(function () {
+            showToast('Cycle exit accepted. Other clients in this cycle have been notified.', false);
+            loadOverview();
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            showToast(e.message, true);
+          });
+      });
+    });
+
+    tbody.querySelectorAll('.exit-decline-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!btn.dataset.confirmed) {
+          btn.dataset.confirmed = '1';
+          btn.textContent = 'Confirm Decline?';
+          return;
+        }
+        btn.disabled = true;
+        apiFetch('/api/admin/cycle-exit-requests/' + encodeURIComponent(btn.getAttribute('data-id')) + '/process', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'decline' })
+        })
+          .then(function () {
+            showToast('Cycle exit request declined and cycle restored to active.', false);
+            loadOverview();
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            showToast(e.message, true);
+          });
+      });
+    });
+  }
+
   function renderDeletionRequests() {
     var tbody = document.getElementById('deletionTableBody');
     tbody.innerHTML = state.deletionRequests.map(function (d) {
@@ -1138,6 +1218,7 @@
         renderUpdates();
         renderMembers(document.getElementById('memberSearchInput').value);
         renderAdminLoans();
+        renderCycleExitRequests();
         renderRequests();
         renderDeletionRequests();
         if (site && typeof site.observeReveals === 'function') {
@@ -1772,7 +1853,8 @@
   window.addEventListener('shimogy:cloud-auth', function (e) {
     var detail = (e && e.detail) || {};
     syncCloudButtonVisibility();
-    if (detail.isAdmin && detail.user && !getToken()) {
+    var curToken = getToken();
+    if (detail.isAdmin && detail.user && (!curToken || curToken.indexOf('cloud_') === 0)) {
       var cloudToken = 'cloud_adm_' + detail.user.uid;
       if (window.location.protocol !== 'file:' && window.ShimogyCloud && typeof window.ShimogyCloud.getIdToken === 'function') {
         window.ShimogyCloud.getIdToken()
@@ -1784,7 +1866,7 @@
             }
           })
           .catch(function () {});
-      } else {
+      } else if (window.location.protocol === 'file:') {
         setToken(cloudToken);
         loadOverview(false);
       }
@@ -1796,7 +1878,9 @@
   if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
 
   syncCloudButtonVisibility();
-  if (getToken()) {
+  if (getToken() && (window.location.protocol === 'file:' || getToken().indexOf('cloud_') !== 0)) {
     loadOverview();
+  } else if (getToken() && getToken().indexOf('cloud_') === 0) {
+    setToken('');
   }
 })();

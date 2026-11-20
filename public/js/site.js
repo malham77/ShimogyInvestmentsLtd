@@ -180,6 +180,20 @@
         };
       }
 
+      if (status === 'exit_pending') {
+        return {
+          initialTurn: initialTurn,
+          currentTurn: currentTurn,
+          totalClients: totalClients,
+          cycleType: cycleType,
+          status: status,
+          payoutReached: false,
+          daysToPayout: daysToNext,
+          label: 'My Cycle #' + Math.max(1, currentTurn) + ' of ' + totalClients,
+          subLabel: 'Exit requested · Awaiting Admin approval'
+        };
+      }
+
       if (currentTurn <= 0) {
         return {
           initialTurn: initialTurn,
@@ -314,11 +328,22 @@
     initNavigation: function () {
       var header = document.querySelector('.site-header');
       if (header) {
+        var syncHeaderOffset = function () {
+          var h = header.offsetHeight || 80;
+          document.documentElement.style.setProperty('--header-sticky-offset', h + 'px');
+        };
         var syncHeaderScroll = function () {
           header.classList.toggle('scrolled', (window.scrollY || window.pageYOffset || 0) > 18);
         };
+        syncHeaderOffset();
         syncHeaderScroll();
         window.addEventListener('scroll', syncHeaderScroll, { passive: true });
+        window.addEventListener('resize', syncHeaderOffset, { passive: true });
+        if (typeof ResizeObserver === 'function') {
+          try {
+            new ResizeObserver(syncHeaderOffset).observe(header);
+          } catch (_e) {}
+        }
       }
 
       var menuBtn = document.getElementById('mobileMenuBtn');

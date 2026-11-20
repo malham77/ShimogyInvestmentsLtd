@@ -69,15 +69,33 @@
     ) {
       return fallback || '';
     }
-    if (
-      clean.indexOf('/') === 0 ||
-      clean.indexOf('assets/') === 0 ||
-      clean.indexOf('https://') === 0 ||
-      clean.indexOf('http://') === 0 ||
-      clean.indexOf('data:image/') === 0 ||
-      /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(clean)
+    var candidate = clean;
+    if (candidate.indexOf('//') === 0) {
+      candidate = 'https:' + candidate;
+    } else if (
+      candidate.indexOf('/') !== 0 &&
+      candidate.indexOf('assets/') !== 0 &&
+      candidate.indexOf('https://') !== 0 &&
+      candidate.indexOf('http://') !== 0 &&
+      candidate.indexOf('mailto:') !== 0 &&
+      candidate.indexOf('tel:') !== 0 &&
+      candidate.indexOf('data:image/') !== 0 &&
+      !/^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(candidate) &&
+      /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\/|$|\?)/.test(candidate)
     ) {
-      return clean;
+      candidate = 'https://' + candidate;
+    }
+    if (
+      candidate.indexOf('/') === 0 ||
+      candidate.indexOf('assets/') === 0 ||
+      candidate.indexOf('https://') === 0 ||
+      candidate.indexOf('http://') === 0 ||
+      candidate.indexOf('mailto:') === 0 ||
+      candidate.indexOf('tel:') === 0 ||
+      candidate.indexOf('data:image/') === 0 ||
+      /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(candidate)
+    ) {
+      return candidate;
     }
     return fallback || '';
   }
@@ -104,10 +122,10 @@
         email: 'shimogygroup@gmail.com',
         address: 'Kawempe Tula, Kampala, Uganda',
         working_hours: 'Monday - Saturday: 8:00 AM - 6:00 PM EAT (Sunday: Closed)',
-        social_facebook: 'https://www.facebook.com',
-        social_tiktok: 'https://www.tiktok.com',
-        social_youtube: 'https://www.youtube.com',
-        social_instagram: 'https://www.instagram.com',
+        social_facebook: 'https://www.facebook.com/share/r/1CR2Q4xdwC/',
+        social_tiktok: 'https://tiktok.com/@shimogygroup.com',
+        social_youtube: 'https://youtube.com/@shimogygroup',
+        social_instagram: 'https://www.instagram.com/shimogygroup',
         logo_url: 'assets/aistudio/logo2_be71428a.jpg',
         about_mission: 'To offer smart and profitable investment opportunities with simplified financial solutions to all our local and international clients.',
         about_vision: 'To lead a positive financial transformation through smart investments and simplified financial solutions across the globe.',
@@ -456,11 +474,15 @@
         }
       ],
       requests: [],
-      deletionRequests: []
+      deletionRequests: [],
+      cycleExitRequests: [],
+      clientNotifications: []
     };
   }
 
   function normalizeLoadedDb(db) {
+    if (!Array.isArray(db.cycleExitRequests)) db.cycleExitRequests = [];
+    if (!Array.isArray(db.clientNotifications)) db.clientNotifications = [];
     if (Array.isArray(db.investments)) {
       db.investments.forEach(function (inv) {
         if (!inv.returns_date) inv.returns_date = computeReturnsDate(inv.created_at || todayISO(), inv.duration || '60 Days');
@@ -646,17 +668,77 @@
       return jsonResp(200, { success: true });
     }
 
+    function attachCoMembers(dbObj, mRow, rawCycles) {
+      var selfId = mRow.id;
+      var selfPhone = normalizePhone(mRow.phone || '');
+      return (rawCycles || []).map(function (cy) {
+        var cKey = String(cy.cycle_name || '').trim().toLowerCase();
+        var peerNames = {};
+        (dbObj.memberCycles || []).forEach(function (p) {
+          var pKey = String(p.cycle_name || '').trim().toLowerCase();
+          var pSt = String(p.status || 'active').toLowerCase();
+          if (!cKey || pKey !== cKey || pSt === 'exited' || pSt === 'stopped') return;
+          var pPhone = normalizePhone(p.member_phone || '');
+          var isSelf = (p.member_id && Number(p.member_id) === Number(selfId)) || (pPhone && pPhone === selfPhone);
+          if (isSelf) return;
+          var owner = p.member_id ? (dbObj.members || []).find(function (mm) { return mm.id === p.member_id; }) : null;
+          var disp = String((owner && owner.name) || p.member_name || '').trim();
+          if (!disp) return;
+          var dedupKey = p.member_id ? ('id:' + p.member_id) : ('ph:' + pPhone);
+          peerNames[dedupKey] = disp;
+        });
+        return Object.assign({}, cy, {
+          co_members: Object.keys(peerNames).map(function (k) { return peerNames[k]; }).sort()
+        });
+      });
+    }
+
+    function notifyCyclePeersStandalone(dbObj, cycRow, fallbackExiter) {
+      var cKey = String(cycRow.cycle_name || '').trim().toLowerCase();
+      if (!cKey) return;
+      var exId = cycRow.member_id || null;
+      var exPhone = normalizePhone(cycRow.member_phone || '');
+      var exOwner = exId ? (dbObj.members || []).find(function (mm) { return mm.id === exId; }) : null;
+      var exName = String((exOwner && exOwner.name) || fallbackExiter || cycRow.member_name || 'A client').trim();
+      var seen = {};
+      (dbObj.memberCycles || []).forEach(function (p) {
+        var pKey = String(p.cycle_name || '').trim().toLowerCase();
+        var pSt = String(p.status || 'active').toLowerCase();
+        if (pKey !== cKey || pSt === 'exited' || pSt === 'stopped') return;
+        var pPhone = normalizePhone(p.member_phone || '');
+        var isSelf = (p.member_id && exId && Number(p.member_id) === Number(exId)) || (pPhone && pPhone === exPhone);
+        if (isSelf) return;
+        var dedupKey = p.member_id ? ('id:' + p.member_id) : ('ph:' + pPhone);
+        if (seen[dedupKey]) return;
+        seen[dedupKey] = true;
+        dbObj.clientNotifications.unshift({
+          id: nextId(dbObj),
+          member_id: p.member_id || null,
+          member_phone: pPhone || p.member_phone || '',
+          notif_type: 'cycle_exit',
+          cycle_name: cycRow.cycle_name,
+          title: 'Client Left Your Cycle',
+          message: exName + ' has left your cycle (' + cycRow.cycle_name + ').',
+          is_read: 0,
+          created_at: nowISO()
+        });
+      });
+    }
+
     if (pathOnly === '/api/member/me' && method === 'GET') {
       var mSess = getSession(db, headers);
       if (!mSess || mSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
       var mRow = db.members.find(function (m) { return m.id === mSess.user_id; });
       if (!mRow) return jsonResp(404, { error: 'Client account not found.' });
+      var ownCycles = db.memberCycles.filter(function (c) { return c.member_id === mRow.id || c.member_phone === mRow.phone; });
+      var ownNotifs = (db.clientNotifications || []).filter(function (n) { return n.member_id === mRow.id || n.member_phone === mRow.phone; });
       return jsonResp(200, {
         member: Object.assign(sanitizeMember(mRow), {
           investments: db.investments.filter(function (i) { return i.member_id === mRow.id || i.member_phone === mRow.phone; }),
           savings: db.savings.filter(function (s) { return s.member_id === mRow.id || s.member_phone === mRow.phone; }),
           loans: db.loans.filter(function (l) { return l.member_id === mRow.id || l.member_phone === mRow.phone; }),
-          cycles: db.memberCycles.filter(function (c) { return c.member_id === mRow.id || c.member_phone === mRow.phone; })
+          cycles: attachCoMembers(db, mRow, ownCycles),
+          notifications: ownNotifs
         })
       });
     }
@@ -669,16 +751,80 @@
       var targetCycId = Number(mCycleAct[1]);
       var cycRow = db.memberCycles.find(function (c) { return c.id === targetCycId; });
       if (!cycRow || !cMem) return jsonResp(404, { error: 'Cycle record not found.' });
-      if (cycRow.member_id !== cMem.id && normalizePhone(cycRow.member_phone) !== normalizePhone(cMem.phone)) {
+      var normMemPhone = normalizePhone(cMem.phone);
+      if (cycRow.member_id !== cMem.id && normalizePhone(cycRow.member_phone) !== normMemPhone) {
         return jsonResp(403, { error: 'You are not authorized to modify this cycle.' });
       }
       var actName = String(body.action || '').toLowerCase();
       if (actName !== 'exit' && actName !== 'stop') {
         return jsonResp(400, { error: 'Valid action (exit or stop) is required.' });
       }
-      cycRow.status = actName === 'stop' ? 'stopped' : 'exited';
+      var curCycSt = String(cycRow.status || 'active').toLowerCase();
+      if (curCycSt === 'exited' || curCycSt === 'stopped' || curCycSt === 'completed') {
+        return jsonResp(400, { error: 'This cycle has already been closed.' });
+      }
+      if (curCycSt === 'exit_pending') {
+        return jsonResp(409, { error: 'Your cycle exit request is already awaiting admin approval.' });
+      }
+      var cKeyCheck = String(cycRow.cycle_name || '').trim().toLowerCase();
+      var hasPeers = db.memberCycles.some(function (p) {
+        var pSt = String(p.status || 'active').toLowerCase();
+        var pPh = normalizePhone(p.member_phone || '');
+        var isSelf = p.member_id === cMem.id || pPh === normMemPhone;
+        return !isSelf && String(p.cycle_name || '').trim().toLowerCase() === cKeyCheck && pSt !== 'exited' && pSt !== 'stopped';
+      });
+      if (actName !== 'exit' && !hasPeers) {
+        cycRow.status = 'stopped';
+        saveDb(db);
+        return jsonResp(200, { success: true, status: 'stopped', pendingApproval: false, message: 'Custom cycle stopped successfully.' });
+      }
+      cycRow.status = 'exit_pending';
+      if (!db.cycleExitRequests.some(function (r) { return r.member_cycle_id === targetCycId && r.status === 'pending'; })) {
+        db.cycleExitRequests.unshift({
+          id: nextId(db),
+          member_cycle_id: targetCycId,
+          member_id: cMem.id,
+          member_phone: cMem.phone,
+          member_name: cMem.name || cycRow.member_name || 'Client',
+          cycle_name: cycRow.cycle_name,
+          cycle_type: cycRow.cycle_type || 'public',
+          action_type: actName,
+          reason: String(body.reason || ''),
+          status: 'pending',
+          created_at: nowISO(),
+          processed_at: ''
+        });
+      }
       saveDb(db);
-      return jsonResp(200, { success: true, status: cycRow.status });
+      return jsonResp(200, { success: true, status: 'exit_pending', pendingApproval: true, message: 'Cycle exit request submitted. It will take effect once accepted by Admin.' });
+    }
+
+    if (pathOnly === '/api/member/notifications/read-all' && method === 'POST') {
+      var nrSess = getSession(db, headers);
+      if (!nrSess || nrSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
+      var nrMem = db.members.find(function (m) { return m.id === nrSess.user_id; });
+      if (!nrMem) return jsonResp(404, { error: 'Client not found.' });
+      (db.clientNotifications || []).forEach(function (n) {
+        if (n.member_id === nrMem.id || n.member_phone === nrMem.phone) n.is_read = 1;
+      });
+      saveDb(db);
+      return jsonResp(200, { success: true });
+    }
+
+    var mNotifRead = pathOnly.match(/^\/api\/member\/notifications\/(\d+)\/read$/);
+    if (mNotifRead && method === 'POST') {
+      var nSess = getSession(db, headers);
+      if (!nSess || nSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
+      var nMem = db.members.find(function (m) { return m.id === nSess.user_id; });
+      var nId = Number(mNotifRead[1]);
+      var nItem = (db.clientNotifications || []).find(function (n) { return n.id === nId; });
+      if (!nItem || !nMem) return jsonResp(404, { error: 'Notification not found.' });
+      if (nItem.member_id !== nMem.id && normalizePhone(nItem.member_phone) !== normalizePhone(nMem.phone)) {
+        return jsonResp(403, { error: 'Not authorized.' });
+      }
+      nItem.is_read = 1;
+      saveDb(db);
+      return jsonResp(200, { success: true });
     }
 
     if (pathOnly === '/api/member/change-password' && method === 'POST') {
@@ -758,7 +904,8 @@
         heroSlides: db.heroSlides,
         testimonials: db.testimonials,
         requests: db.requests,
-        deletionRequests: db.deletionRequests
+        deletionRequests: db.deletionRequests,
+        cycleExitRequests: db.cycleExitRequests || []
       });
     }
 
@@ -1285,6 +1432,50 @@
       return jsonResp(200, { success: true });
     }
 
+    var mCycExit = pathOnly.match(/^\/api\/admin\/cycle-exit-requests\/(\d+)\/process$/);
+    if (mCycExit && method === 'POST') {
+      var exId = Number(mCycExit[1]);
+      var exAct = String(body.action || '').toLowerCase();
+      var exReq = (db.cycleExitRequests || []).find(function (x) { return x.id === exId; });
+      if (!exReq) return jsonResp(404, { error: 'Cycle exit request not found.' });
+      if (exReq.status !== 'pending') return jsonResp(409, { error: 'Already processed.' });
+      var cycTarget = db.memberCycles.find(function (c) { return c.id === exReq.member_cycle_id; });
+      if (exAct === 'approve') {
+        if (cycTarget) cycTarget.status = exReq.action_type === 'stop' ? 'stopped' : 'exited';
+        exReq.status = 'approved';
+        exReq.processed_at = nowISO();
+        notifyCyclePeersStandalone(db, cycTarget || exReq, exReq.member_name);
+        db.clientNotifications.unshift({
+          id: nextId(db),
+          member_id: exReq.member_id || null,
+          member_phone: exReq.member_phone,
+          notif_type: 'cycle_exit_approved',
+          cycle_name: exReq.cycle_name,
+          title: 'Cycle Exit Approved',
+          message: 'Your request to exit ' + exReq.cycle_name + ' was approved by Admin.',
+          is_read: 0,
+          created_at: nowISO()
+        });
+      } else {
+        exReq.status = 'declined';
+        exReq.processed_at = nowISO();
+        if (cycTarget && cycTarget.status === 'exit_pending') cycTarget.status = 'active';
+        db.clientNotifications.unshift({
+          id: nextId(db),
+          member_id: exReq.member_id || null,
+          member_phone: exReq.member_phone,
+          notif_type: 'cycle_exit_declined',
+          cycle_name: exReq.cycle_name,
+          title: 'Cycle Exit Declined',
+          message: 'Your request to exit ' + exReq.cycle_name + ' was declined by Admin. Your cycle remains active.',
+          is_read: 0,
+          created_at: nowISO()
+        });
+      }
+      saveDb(db);
+      return jsonResp(200, { success: true, status: exReq.status });
+    }
+
     return jsonResp(404, { error: 'Endpoint not found.' });
   }
 
@@ -1360,18 +1551,36 @@
 
   function tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud) {
     var isHttp = typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:';
-    var isMutation = method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH';
 
+    // Over HTTP/HTTPS, NEVER route Admin or Client Portal operations to Firebase Firestore or localStorage:
+    // Supabase PostgreSQL via Express (/api/*) is the single live source of truth across all devices.
+    if (isHttp) {
+      if (pathOnly === '/api/site-data' && method === 'GET' && cloud && typeof cloud.getPublicSiteData === 'function') {
+        return cloud.getPublicSiteData()
+          .then(function (cloudData) {
+            return cloudData ? jsonResp(200, cloudData) : jsonResp(503, { error: 'Unable to reach live database.' });
+          })
+          .catch(function () {
+            return jsonResp(503, { error: 'Unable to reach live database.' });
+          });
+      }
+      if (pathOnly === '/api/logout' && method === 'POST') {
+        if (cloud && typeof cloud.signOutCloud === 'function') cloud.signOutCloud().catch(function () {});
+        return Promise.resolve(jsonResp(200, { success: true }));
+      }
+      return Promise.resolve(jsonResp(503, {
+        error: 'Live server connection could not be reached right now. Please wait a moment and try again.'
+      }));
+    }
+
+    // Offline file:// desktop bundle fallback only
     if (cloud && typeof cloud.isEnabled === 'function' && cloud.isEnabled()) {
       if (pathOnly === '/api/site-data' && method === 'GET') {
         return cloud.getPublicSiteData()
           .then(function (cloudData) {
-            if (cloudData) return jsonResp(200, cloudData);
-            return isHttp ? jsonResp(503, { error: 'Unable to reach live database.' }) : handleStandaloneApi(url, init);
+            return cloudData ? jsonResp(200, cloudData) : handleStandaloneApi(url, init);
           })
-          .catch(function () {
-            return isHttp ? jsonResp(503, { error: 'Unable to reach live database.' }) : handleStandaloneApi(url, init);
-          });
+          .catch(function () { return handleStandaloneApi(url, init); });
       }
       if (pathOnly === '/api/requests' && method === 'POST') {
         if (!body.request_type || !body.applicant_name || !body.applicant_phone || !body.age_confirmed) {
@@ -1379,31 +1588,18 @@
         }
         return cloud.createServiceRequest(body)
           .then(function (res) { return jsonResp(201, res); })
-          .catch(function (err) {
-            return isHttp
-              ? jsonResp(503, { error: (err && err.message) || 'Unable to submit request to live database right now.' })
-              : handleStandaloneApi(url, init);
-          });
+          .catch(function () { return handleStandaloneApi(url, init); });
       }
       if (pathOnly === '/api/deletion-requests' && method === 'POST') {
         if (!body.full_name || !body.phone) return Promise.resolve(handleStandaloneApi(url, init));
         return cloud.createDeletionRequest(body)
           .then(function (res) { return jsonResp(201, res); })
-          .catch(function (err) {
-            return isHttp
-              ? jsonResp(503, { error: (err && err.message) || 'Unable to submit deletion request right now.' })
-              : handleStandaloneApi(url, init);
-          });
+          .catch(function () { return handleStandaloneApi(url, init); });
       }
       if (pathOnly === '/api/member/login' && method === 'POST') {
         return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
-          .then(function (cloudRes) {
-            if (cloudRes) return jsonResp(200, cloudRes);
-            return isHttp ? jsonResp(401, { error: 'Invalid phone number or password.' }) : handleStandaloneApi(url, init);
-          })
-          .catch(function () {
-            return isHttp ? jsonResp(401, { error: 'Invalid phone number or password.' }) : handleStandaloneApi(url, init);
-          });
+          .then(function (cloudRes) { return cloudRes ? jsonResp(200, cloudRes) : handleStandaloneApi(url, init); })
+          .catch(function () { return handleStandaloneApi(url, init); });
       }
       if (pathOnly === '/api/member/me' && method === 'GET' && (token.indexOf('cloud_portal_') === 0 || token.indexOf('cloud_mem_uid_') === 0)) {
         var waitReady = token.indexOf('cloud_mem_uid_') === 0 && typeof cloud.waitForAuthReady === 'function'
@@ -1412,7 +1608,7 @@
         return waitReady
           .then(function () { return cloud.fetchMemberSessionFromCloud(token); })
           .then(function (res) { return res ? jsonResp(200, res) : jsonResp(401, { error: 'Session expired. Please sign in again.' }); })
-          .catch(function () { return jsonResp(401, { error: 'Unable to load cloud portfolio.' }); });
+          .catch(function () { return jsonResp(401, { error: 'Unable to load portfolio.' }); });
       }
       if (pathOnly === '/api/logout' && method === 'POST') {
         var shouldCloudOut = token.indexOf('cloud_') === 0 || (typeof cloud.isAdminSignedIn === 'function' && cloud.isAdminSignedIn());
@@ -1420,32 +1616,47 @@
         return Promise.resolve(jsonResp(200, { success: true }));
       }
       if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login' && pathOnly !== '/api/admin/google-login') {
-        var isCloudToken = token.indexOf('cloud_adm_') === 0;
         var authWait = typeof cloud.waitForAuthReady === 'function' ? cloud.waitForAuthReady() : Promise.resolve();
         return authWait.then(function () {
           if (cloud.isAdminSignedIn()) {
             return cloud.handleAdminApi(pathOnly, method, body).then(function (cloudResp) {
-              if (cloudResp) return jsonResp(cloudResp.status, cloudResp.data);
-              return isHttp
-                ? jsonResp(503, { error: 'Live server connection required for this operation so all devices stay synchronized.' })
-                : handleStandaloneApi(url, init);
+              return cloudResp ? jsonResp(cloudResp.status, cloudResp.data) : handleStandaloneApi(url, init);
             });
-          }
-          if (isCloudToken || isHttp) {
-            return jsonResp(401, { error: 'Live database session expired. Please sign in again so changes save online for everyone.' });
           }
           return handleStandaloneApi(url, init);
         });
       }
     }
 
-    if (isHttp && (pathOnly.indexOf('/api/admin/') === 0 || (pathOnly.indexOf('/api/member/') === 0 && isMutation))) {
-      return Promise.resolve(jsonResp(503, {
-        error: 'Live online server unavailable. Changes were not saved locally because they must sync across all devices.'
-      }));
-    }
-
     return Promise.resolve(handleStandaloneApi(url, init));
+  }
+
+  function delayMs(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function fetchWithRetry(input, init, attempt) {
+    var retryDelays = [450, 1000];
+    return nativeFetch(input, init)
+      .then(function (res) {
+        var ct = (res.headers && res.headers.get('content-type')) || '';
+        var isJson = ct.indexOf('application/json') !== -1 || ct.indexOf('application/sql') !== -1;
+        var shouldRetry = !isJson || res.status === 502 || res.status === 503 || res.status === 504;
+        if (shouldRetry && attempt < retryDelays.length) {
+          return delayMs(retryDelays[attempt]).then(function () {
+            return fetchWithRetry(input, init, attempt + 1);
+          });
+        }
+        return { res: res, isJson: isJson };
+      })
+      .catch(function (err) {
+        if (attempt < retryDelays.length) {
+          return delayMs(retryDelays[attempt]).then(function () {
+            return fetchWithRetry(input, init, attempt + 1);
+          });
+        }
+        throw err;
+      });
   }
 
   var shimogyFetch = function (input, init) {
@@ -1466,11 +1677,10 @@
 
     // Over HTTP/HTTPS, ALWAYS use live Express + Supabase PostgreSQL as primary source of truth
     if (nativeFetch && window.location.protocol !== 'file:') {
-      return nativeFetch(input, init)
-        .then(function (res) {
-          var ct = (res.headers && res.headers.get('content-type')) || '';
-          var isJson = ct.indexOf('application/json') !== -1 || ct.indexOf('application/sql') !== -1;
-          if (!isJson || res.status === 405 || res.status >= 502) {
+      return fetchWithRetry(input, init, 0)
+        .then(function (outcome) {
+          var res = outcome.res;
+          if (!outcome.isJson || res.status === 405 || res.status >= 502) {
             return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
           }
           return res;

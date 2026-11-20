@@ -125,6 +125,7 @@
 
         <!-- TAB 1: Overview -->
         <section id="tab-overview" class="tab-panel active">
+          <div id="ovExitAlertWrap" style="margin-bottom:16px;"></div>
           <div class="kpi-strip" style="margin-bottom:24px;">
             <div class="kpi-box"><div class="kpi-num tabular-nums" id="ovMembersCount">0</div><div class="kpi-label">Registered Clients</div></div>
             <div class="kpi-box accent-sky"><div class="kpi-num tabular-nums" id="ovPlansCount">0</div><div class="kpi-label">Public Investment Plans</div></div>
@@ -681,8 +682,21 @@
           </div>
         </section>
 
-        <!-- TAB 11: Service Requests -->
+        <!-- TAB 11: Service & Cycle Exit Requests -->
         <section id="tab-requests" class="tab-panel">
+          <div class="panel-card">
+            <h2>Cycle Exit Approval Requests</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">
+              When a client requests to exit a cycle, it remains pending until accepted here. Approving an exit removes the client from the cycle and notifies all other clients sharing that cycle.
+            </p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>ID</th><th>Client</th><th>Phone</th><th>Cycle Name</th><th>Type</th><th>Requested On</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="cycleExitRequestsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="panel-card">
             <h2>Client Service Requests (Investments, Savings, Cycles, Loans)</h2>
             <div class="table-wrap">

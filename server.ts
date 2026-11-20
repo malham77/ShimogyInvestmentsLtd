@@ -125,6 +125,17 @@ function asyncHandler(fn: (req: AuthenticatedRequest, res: Response, next: NextF
           res.status(400).json({ error: 'One or more numeric or date values are invalid.' });
           return;
         }
+        if (
+          code === 'ECONNRESET' ||
+          code === 'ETIMEDOUT' ||
+          code === '57P01' ||
+          code === '08006' ||
+          code === '08003' ||
+          /connection terminated|timeout|socket hang up/i.test(msg)
+        ) {
+          res.status(503).json({ error: 'Database connection was briefly interrupted. Please try again.' });
+          return;
+        }
         res.status(500).json({ error: 'Unable to process request right now. Please try again.' });
       }
     });
@@ -190,12 +201,60 @@ async function getFullMemberProfile(memberId: number) {
   if (!member) return null;
 
   const phone = member.phone;
-  const [investments, rawSavings, rawLoans, cycles] = await Promise.all([
+  const normSelfPhone = normalizePhone(phone);
+  const [investments, rawSavings, rawLoans, rawCycles, notifications] = await Promise.all([
     db.all('SELECT * FROM investments WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
     db.all('SELECT * FROM savings WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
     db.all('SELECT * FROM loans WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
-    db.all('SELECT * FROM member_cycles WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone])
+    db.all('SELECT * FROM member_cycles WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
+    db.all('SELECT * FROM client_notifications WHERE member_id = ? OR member_phone = ? ORDER BY id DESC LIMIT 30', [memberId, phone])
   ]);
+
+  const cycleKeys = Array.from(
+    new Set(
+      rawCycles
+        .map((c) => String(c.cycle_name || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  const peersByCycle = new Map<string, Map<string, string>>();
+  if (cycleKeys.length > 0) {
+    const placeholders = cycleKeys.map(() => '?').join(', ');
+    const peerRows = await db.all<Record<string, any>>(
+      `SELECT mc.cycle_name, mc.member_id, mc.member_phone,
+              COALESCE(NULLIF(m.name, ''), mc.member_name) AS display_name
+       FROM member_cycles mc
+       LEFT JOIN members m ON m.id = mc.member_id
+       WHERE LOWER(TRIM(mc.cycle_name)) IN (${placeholders})
+         AND LOWER(COALESCE(mc.status, 'active')) NOT IN ('exited', 'stopped')`,
+      cycleKeys
+    );
+    for (const row of peerRows) {
+      const cKey = String(row.cycle_name || '').trim().toLowerCase();
+      if (!cKey) continue;
+      const peerId = row.member_id !== null && row.member_id !== undefined ? Number(row.member_id) : null;
+      const peerPhone = normalizePhone(String(row.member_phone || ''));
+      const isSelf = (peerId !== null && peerId === Number(memberId)) || (peerPhone !== '' && peerPhone === normSelfPhone);
+      if (isSelf) continue;
+
+      const displayName = String(row.display_name || '').trim();
+      if (!displayName) continue;
+      const clientKey = peerId !== null ? `id:${peerId}` : `ph:${peerPhone || displayName.toLowerCase()}`;
+      if (!peersByCycle.has(cKey)) peersByCycle.set(cKey, new Map<string, string>());
+      peersByCycle.get(cKey)!.set(clientKey, displayName);
+    }
+  }
+
+  const cycles = rawCycles.map((cy) => {
+    const cKey = String(cy.cycle_name || '').trim().toLowerCase();
+    const peerMap = peersByCycle.get(cKey);
+    const coMembers = peerMap ? Array.from(peerMap.values()).sort((a, b) => a.localeCompare(b)) : [];
+    return {
+      ...cy,
+      co_members: coMembers
+    };
+  });
 
   const savings = rawSavings.map((s) => ({
     ...s,
@@ -217,7 +276,8 @@ async function getFullMemberProfile(memberId: number) {
     investments: normalizedInvestments,
     savings,
     loans,
-    cycles
+    cycles,
+    notifications
   };
 }
 
@@ -471,27 +531,148 @@ app.post(
     }
     const id = Number(req.params.id);
     const action = String((req.body && req.body.action) || '').toLowerCase();
+    const reason = String((req.body && req.body.reason) || '').trim().slice(0, 500);
     if (!Number.isInteger(id) || id <= 0 || (action !== 'exit' && action !== 'stop')) {
       res.status(400).json({ error: 'Valid cycle ID and action (exit or stop) are required.' });
       return;
     }
-    const member = await db.get<{ id: number; phone: string }>('SELECT id, phone FROM members WHERE id = ?', [session.user_id]);
-    const cycle = await db.get<{ id: number; member_id: number | null; member_phone: string; cycle_type: string }>(
-      'SELECT id, member_id, member_phone, cycle_type FROM member_cycles WHERE id = ?',
-      [id]
+    const member = await db.get<{ id: number; name: string; phone: string }>(
+      'SELECT id, name, phone FROM members WHERE id = ?',
+      [session.user_id]
     );
+    const cycle = await db.get<Record<string, any>>('SELECT * FROM member_cycles WHERE id = ?', [id]);
     if (!cycle || !member) {
       res.status(404).json({ error: 'Cycle record not found.' });
       return;
     }
-    const ownsCycle = Number(cycle.member_id) === Number(member.id) || normalizePhone(cycle.member_phone) === normalizePhone(member.phone);
+    const normMemberPhone = normalizePhone(member.phone);
+    const ownsCycle = Number(cycle.member_id) === Number(member.id) || normalizePhone(cycle.member_phone) === normMemberPhone;
     if (!ownsCycle) {
       res.status(403).json({ error: 'You are not authorized to modify this cycle.' });
       return;
     }
-    const nextStatus = action === 'stop' ? 'stopped' : 'exited';
-    await db.run('UPDATE member_cycles SET status = ? WHERE id = ?', [nextStatus, id]);
-    res.json({ success: true, status: nextStatus });
+
+    const currentStatus = String(cycle.status || 'active').toLowerCase();
+    if (currentStatus === 'exited' || currentStatus === 'stopped' || currentStatus === 'completed') {
+      res.status(400).json({ error: 'This cycle has already been closed.' });
+      return;
+    }
+    if (currentStatus === 'exit_pending') {
+      res.status(409).json({ error: 'Your cycle exit request is already awaiting admin approval.' });
+      return;
+    }
+
+    // Check if other clients share this cycle
+    const peerRows = await db.all<{ member_id: number | null; member_phone: string }>(
+      `SELECT member_id, member_phone FROM member_cycles
+       WHERE LOWER(TRIM(cycle_name)) = LOWER(TRIM(?))
+         AND LOWER(COALESCE(status, 'active')) NOT IN ('exited', 'stopped')`,
+      [String(cycle.cycle_name || '')]
+    );
+    const otherPeers = peerRows.filter((p) => {
+      const pid = p.member_id !== null && p.member_id !== undefined ? Number(p.member_id) : null;
+      const pPhone = normalizePhone(String(p.member_phone || ''));
+      return !(pid !== null && pid === Number(member.id)) && pPhone !== normMemberPhone;
+    });
+
+    const requiresAdminApproval = action === 'exit' || otherPeers.length > 0;
+    if (!requiresAdminApproval) {
+      await db.run('UPDATE member_cycles SET status = ? WHERE id = ?', ['stopped', id]);
+      res.json({
+        success: true,
+        status: 'stopped',
+        pendingApproval: false,
+        message: 'Custom cycle stopped successfully.'
+      });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.run('UPDATE member_cycles SET status = ? WHERE id = ?', ['exit_pending', id]);
+      const existingPending = await tx.get<{ id: number }>(
+        "SELECT id FROM cycle_exit_requests WHERE member_cycle_id = ? AND status = 'pending'",
+        [id]
+      );
+      if (!existingPending) {
+        await tx.run(
+          `INSERT INTO cycle_exit_requests (member_cycle_id, member_id, member_phone, member_name, cycle_name, cycle_type, action_type, reason, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+          [
+            id,
+            member.id,
+            member.phone,
+            member.name || cycle.member_name || 'Client',
+            String(cycle.cycle_name || ''),
+            String(cycle.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
+            action,
+            reason
+          ]
+        );
+      }
+    });
+
+    res.json({
+      success: true,
+      status: 'exit_pending',
+      pendingApproval: true,
+      message: 'Cycle exit request submitted. It will take effect once accepted by Admin.'
+    });
+  })
+);
+
+app.post(
+  '/api/member/notifications/read-all',
+  requireMemberOrAdmin,
+  asyncHandler(async (req, res) => {
+    const session = req.authSession!;
+    if (session.role !== 'member') {
+      res.status(403).json({ error: 'Client session required.' });
+      return;
+    }
+    const member = await db.get<{ id: number; phone: string }>('SELECT id, phone FROM members WHERE id = ?', [session.user_id]);
+    if (!member) {
+      res.status(404).json({ error: 'Client account not found.' });
+      return;
+    }
+    await db.run('UPDATE client_notifications SET is_read = 1 WHERE member_id = ? OR member_phone = ?', [
+      member.id,
+      member.phone
+    ]);
+    res.json({ success: true });
+  })
+);
+
+app.post(
+  '/api/member/notifications/:id/read',
+  requireMemberOrAdmin,
+  asyncHandler(async (req, res) => {
+    const session = req.authSession!;
+    if (session.role !== 'member') {
+      res.status(403).json({ error: 'Client session required.' });
+      return;
+    }
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'Invalid notification ID.' });
+      return;
+    }
+    const member = await db.get<{ id: number; phone: string }>('SELECT id, phone FROM members WHERE id = ?', [session.user_id]);
+    const notif = await db.get<{ id: number; member_id: number | null; member_phone: string }>(
+      'SELECT id, member_id, member_phone FROM client_notifications WHERE id = ?',
+      [id]
+    );
+    if (!notif || !member) {
+      res.status(404).json({ error: 'Notification not found.' });
+      return;
+    }
+    const ownsNotif =
+      Number(notif.member_id) === Number(member.id) || normalizePhone(notif.member_phone) === normalizePhone(member.phone);
+    if (!ownsNotif) {
+      res.status(403).json({ error: 'You are not authorized to modify this notification.' });
+      return;
+    }
+    await db.run('UPDATE client_notifications SET is_read = 1 WHERE id = ?', [id]);
+    res.json({ success: true });
   })
 );
 
@@ -683,7 +864,8 @@ app.get(
       heroSlides,
       testimonials,
       requests,
-      deletionRequests
+      deletionRequests,
+      cycleExitRequests
     ] = await Promise.all([
       db.all<{ key: string; value: string }>('SELECT key, value FROM site_settings'),
       db.all('SELECT * FROM members ORDER BY id DESC'),
@@ -697,7 +879,8 @@ app.get(
       db.all('SELECT * FROM hero_slides ORDER BY sort_order ASC, id ASC'),
       db.all('SELECT * FROM testimonials ORDER BY sort_order ASC, id ASC'),
       db.all('SELECT * FROM service_requests ORDER BY id DESC'),
-      db.all('SELECT * FROM deletion_requests ORDER BY id DESC')
+      db.all('SELECT * FROM deletion_requests ORDER BY id DESC'),
+      db.all('SELECT * FROM cycle_exit_requests ORDER BY id DESC')
     ]);
 
     const settings: Record<string, string> = {};
@@ -732,7 +915,8 @@ app.get(
       heroSlides,
       testimonials,
       requests,
-      deletionRequests
+      deletionRequests,
+      cycleExitRequests
     });
   })
 );
@@ -1165,6 +1349,8 @@ app.delete(
       await tx.run('DELETE FROM savings WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run('DELETE FROM loans WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run('DELETE FROM member_cycles WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
+      await tx.run('DELETE FROM cycle_exit_requests WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
+      await tx.run('DELETE FROM client_notifications WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run("DELETE FROM auth_sessions WHERE role = 'member' AND user_id = ?", [id]);
       await tx.run('DELETE FROM members WHERE id = ?', [id]);
     });
@@ -1457,6 +1643,63 @@ app.post(
   })
 );
 
+async function notifyCyclePeersOnExit(
+  tx: Pick<DatabaseManager, 'all' | 'get' | 'run'>,
+  exitingCycle: {
+    cycle_name: string;
+    member_id?: number | null;
+    member_phone: string;
+    member_name?: string;
+  },
+  fallbackExiterName?: string
+) {
+  const cycleName = String(exitingCycle.cycle_name || '').trim();
+  if (!cycleName) return;
+
+  const exiterMemberId =
+    exitingCycle.member_id !== null && exitingCycle.member_id !== undefined ? Number(exitingCycle.member_id) : null;
+  const exiterPhone = normalizePhone(String(exitingCycle.member_phone || ''));
+
+  let exiterName = String(fallbackExiterName || exitingCycle.member_name || '').trim();
+  if (exiterMemberId) {
+    const mRow = await tx.get<{ name: string }>('SELECT name FROM members WHERE id = ?', [exiterMemberId]);
+    if (mRow && mRow.name) exiterName = String(mRow.name).trim();
+  }
+  if (!exiterName) exiterName = 'A client';
+
+  const peers = await tx.all<Record<string, any>>(
+    `SELECT member_id, member_phone, member_name
+     FROM member_cycles
+     WHERE LOWER(TRIM(cycle_name)) = LOWER(TRIM(?))
+       AND LOWER(COALESCE(status, 'active')) NOT IN ('exited', 'stopped')`,
+    [cycleName]
+  );
+
+  const seenRecipients = new Set<string>();
+  for (const p of peers) {
+    const pId = p.member_id !== null && p.member_id !== undefined ? Number(p.member_id) : null;
+    const pPhone = normalizePhone(String(p.member_phone || ''));
+    const isSelf = (pId !== null && exiterMemberId !== null && pId === exiterMemberId) || (pPhone !== '' && pPhone === exiterPhone);
+    if (isSelf) continue;
+
+    const dedupKey = pId !== null ? `id:${pId}` : `ph:${pPhone}`;
+    if (seenRecipients.has(dedupKey)) continue;
+    seenRecipients.add(dedupKey);
+
+    await tx.run(
+      `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+       VALUES (?, ?, 'cycle_exit', ?, ?, ?, 0)`,
+      [
+        pId,
+        pPhone || String(p.member_phone || ''),
+        cycleName,
+        'Client Left Your Cycle',
+        `${exiterName} has left your cycle (${cycleName}).`
+      ]
+    );
+  }
+}
+
 app.put(
   '/api/admin/member-cycles/:id',
   requireAdmin,
@@ -1476,19 +1719,43 @@ app.put(
     const totalClients = Math.max(2, Number(b.number_of_members ?? existing.number_of_members ?? 10));
     const cycleNum = Math.min(totalClients, Math.max(1, Number(b.cycle_number ?? existing.cycle_number ?? 1)));
     const cycleType = String(b.cycle_type ?? existing.cycle_type ?? 'public').toLowerCase() === 'custom' ? 'custom' : 'public';
-    await db.run(
-      `UPDATE member_cycles SET cycle_name=?, contribution=?, payout_duration=?, number_of_members=?, cycle_number=?, cycle_type=?, status=? WHERE id=?`,
-      [
-        String(b.cycle_name ?? existing.cycle_name).trim(),
-        contrib,
-        String(b.payout_duration ?? existing.payout_duration).trim(),
-        totalClients,
-        cycleNum,
-        cycleType,
-        String(b.status ?? existing.status),
-        id
-      ]
-    );
+    const nextStatus = String(b.status ?? existing.status);
+    const prevStatusLower = String(existing.status || 'active').toLowerCase();
+    const nextStatusLower = nextStatus.toLowerCase();
+    const transitioningToExited =
+      prevStatusLower !== 'exited' &&
+      prevStatusLower !== 'stopped' &&
+      (nextStatusLower === 'exited' || nextStatusLower === 'stopped');
+
+    await db.transaction(async (tx) => {
+      await tx.run(
+        `UPDATE member_cycles SET cycle_name=?, contribution=?, payout_duration=?, number_of_members=?, cycle_number=?, cycle_type=?, status=? WHERE id=?`,
+        [
+          String(b.cycle_name ?? existing.cycle_name).trim(),
+          contrib,
+          String(b.payout_duration ?? existing.payout_duration).trim(),
+          totalClients,
+          cycleNum,
+          cycleType,
+          nextStatus,
+          id
+        ]
+      );
+
+      if (transitioningToExited) {
+        const processedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        await tx.run(
+          "UPDATE cycle_exit_requests SET status = 'approved', processed_at = ? WHERE member_cycle_id = ? AND status = 'pending'",
+          [processedAt, id]
+        );
+        await notifyCyclePeersOnExit(tx, {
+          cycle_name: String(b.cycle_name ?? existing.cycle_name).trim(),
+          member_id: existing.member_id,
+          member_phone: existing.member_phone,
+          member_name: existing.member_name
+        });
+      }
+    });
     res.json({ success: true });
   })
 );
@@ -1497,7 +1764,11 @@ app.delete(
   '/api/admin/member-cycles/:id',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    await db.run('DELETE FROM member_cycles WHERE id = ?', [Number(req.params.id)]);
+    const id = Number(req.params.id);
+    await db.transaction(async (tx) => {
+      await tx.run('DELETE FROM cycle_exit_requests WHERE member_cycle_id = ?', [id]);
+      await tx.run('DELETE FROM member_cycles WHERE id = ?', [id]);
+    });
     res.json({ success: true });
   })
 );
@@ -1747,6 +2018,8 @@ app.post(
           await tx.run('DELETE FROM savings WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run('DELETE FROM loans WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run('DELETE FROM member_cycles WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
+          await tx.run('DELETE FROM cycle_exit_requests WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
+          await tx.run('DELETE FROM client_notifications WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run("DELETE FROM auth_sessions WHERE role = 'member' AND user_id = ?", [member.id]);
           await tx.run('DELETE FROM members WHERE id = ?', [member.id]);
         }
@@ -1760,6 +2033,96 @@ app.post(
     });
 
     res.json({ success: true });
+  })
+);
+
+// Cycle Exit Approval / Decline Processing
+app.post(
+  '/api/admin/cycle-exit-requests/:id/process',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const action = String((req.body && req.body.action) || '').toLowerCase();
+    if (!Number.isInteger(id) || id <= 0 || (action !== 'approve' && action !== 'decline')) {
+      res.status(400).json({ error: 'Valid request ID and action (approve or decline) are required.' });
+      return;
+    }
+
+    const reqRow = await db.get<Record<string, any>>('SELECT * FROM cycle_exit_requests WHERE id = ?', [id]);
+    if (!reqRow) {
+      res.status(404).json({ error: 'Cycle exit request not found.' });
+      return;
+    }
+    if (String(reqRow.status || 'pending').toLowerCase() !== 'pending') {
+      res.status(409).json({ error: 'This cycle exit request has already been processed.' });
+      return;
+    }
+
+    const processedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+    await db.transaction(async (tx) => {
+      if (action === 'approve') {
+        const cycleRow = await tx.get<Record<string, any>>('SELECT * FROM member_cycles WHERE id = ?', [
+          reqRow.member_cycle_id
+        ]);
+        const finalCycleStatus = String(reqRow.action_type || 'exit').toLowerCase() === 'stop' ? 'stopped' : 'exited';
+
+        if (cycleRow) {
+          await tx.run('UPDATE member_cycles SET status = ? WHERE id = ?', [finalCycleStatus, cycleRow.id]);
+        }
+        await tx.run("UPDATE cycle_exit_requests SET status = 'approved', processed_at = ? WHERE id = ?", [
+          processedAt,
+          id
+        ]);
+
+        // Notify all other active clients sharing this cycle
+        await notifyCyclePeersOnExit(
+          tx,
+          {
+            cycle_name: String((cycleRow && cycleRow.cycle_name) || reqRow.cycle_name),
+            member_id: cycleRow ? cycleRow.member_id : reqRow.member_id,
+            member_phone: String((cycleRow && cycleRow.member_phone) || reqRow.member_phone),
+            member_name: String((cycleRow && cycleRow.member_name) || reqRow.member_name)
+          },
+          String(reqRow.member_name || 'A client')
+        );
+
+        // Notify the requesting client that Admin accepted their exit
+        await tx.run(
+          `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+           VALUES (?, ?, 'cycle_exit_approved', ?, ?, ?, 0)`,
+          [
+            reqRow.member_id || null,
+            String(reqRow.member_phone || ''),
+            String(reqRow.cycle_name || ''),
+            'Cycle Exit Approved',
+            `Your request to exit ${reqRow.cycle_name} was approved by Admin.`
+          ]
+        );
+      } else {
+        await tx.run("UPDATE cycle_exit_requests SET status = 'declined', processed_at = ? WHERE id = ?", [
+          processedAt,
+          id
+        ]);
+        await tx.run("UPDATE member_cycles SET status = 'active' WHERE id = ? AND LOWER(status) = 'exit_pending'", [
+          reqRow.member_cycle_id
+        ]);
+
+        await tx.run(
+          `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+           VALUES (?, ?, 'cycle_exit_declined', ?, ?, ?, 0)`,
+          [
+            reqRow.member_id || null,
+            String(reqRow.member_phone || ''),
+            String(reqRow.cycle_name || ''),
+            'Cycle Exit Declined',
+            `Your request to exit ${reqRow.cycle_name} was declined by Admin. Your cycle remains active.`
+          ]
+        );
+      }
+    });
+
+    res.json({ success: true, status: action === 'approve' ? 'approved' : 'declined' });
   })
 );
 

@@ -202,6 +202,15 @@
           </div>
         </div>
 
+        <!-- Client Notifications (Cycle Exits & Approvals) -->
+        <div id="memberNotificationsSection" class="panel-card member-notifications-card" style="display:none;margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+            <h2 style="margin-bottom:0;font-size:1.15rem;">Cycle Alerts &amp; Notifications</h2>
+            <button type="button" id="markAllNotifsReadBtn" class="btn btn-outline btn-sm" style="display:none;">Mark All Read</button>
+          </div>
+          <div id="memberNotificationsList" class="notif-list"></div>
+        </div>
+
         <!-- KPI Strip -->
         <div class="kpi-strip" style="margin-bottom:28px;">
           <div class="kpi-box">
@@ -325,6 +334,7 @@
               <thead>
                 <tr>
                   <th>Cycle Name</th>
+                  <th>Shared With (Clients)</th>
                   <th>Contribution</th>
                   <th>Pay Out Duration</th>
                   <th>Clients</th>
