@@ -1359,11 +1359,19 @@
   }
 
   function tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud) {
+    var isHttp = typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:';
+    var isMutation = method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH';
+
     if (cloud && typeof cloud.isEnabled === 'function' && cloud.isEnabled()) {
       if (pathOnly === '/api/site-data' && method === 'GET') {
         return cloud.getPublicSiteData()
-          .then(function (cloudData) { return cloudData ? jsonResp(200, cloudData) : handleStandaloneApi(url, init); })
-          .catch(function () { return handleStandaloneApi(url, init); });
+          .then(function (cloudData) {
+            if (cloudData) return jsonResp(200, cloudData);
+            return isHttp ? jsonResp(503, { error: 'Unable to reach live database.' }) : handleStandaloneApi(url, init);
+          })
+          .catch(function () {
+            return isHttp ? jsonResp(503, { error: 'Unable to reach live database.' }) : handleStandaloneApi(url, init);
+          });
       }
       if (pathOnly === '/api/requests' && method === 'POST') {
         if (!body.request_type || !body.applicant_name || !body.applicant_phone || !body.age_confirmed) {
@@ -1371,18 +1379,31 @@
         }
         return cloud.createServiceRequest(body)
           .then(function (res) { return jsonResp(201, res); })
-          .catch(function () { return handleStandaloneApi(url, init); });
+          .catch(function (err) {
+            return isHttp
+              ? jsonResp(503, { error: (err && err.message) || 'Unable to submit request to live database right now.' })
+              : handleStandaloneApi(url, init);
+          });
       }
       if (pathOnly === '/api/deletion-requests' && method === 'POST') {
         if (!body.full_name || !body.phone) return Promise.resolve(handleStandaloneApi(url, init));
         return cloud.createDeletionRequest(body)
           .then(function (res) { return jsonResp(201, res); })
-          .catch(function () { return handleStandaloneApi(url, init); });
+          .catch(function (err) {
+            return isHttp
+              ? jsonResp(503, { error: (err && err.message) || 'Unable to submit deletion request right now.' })
+              : handleStandaloneApi(url, init);
+          });
       }
       if (pathOnly === '/api/member/login' && method === 'POST') {
         return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
-          .then(function (cloudRes) { return cloudRes ? jsonResp(200, cloudRes) : handleStandaloneApi(url, init); })
-          .catch(function () { return handleStandaloneApi(url, init); });
+          .then(function (cloudRes) {
+            if (cloudRes) return jsonResp(200, cloudRes);
+            return isHttp ? jsonResp(401, { error: 'Invalid phone number or password.' }) : handleStandaloneApi(url, init);
+          })
+          .catch(function () {
+            return isHttp ? jsonResp(401, { error: 'Invalid phone number or password.' }) : handleStandaloneApi(url, init);
+          });
       }
       if (pathOnly === '/api/member/me' && method === 'GET' && (token.indexOf('cloud_portal_') === 0 || token.indexOf('cloud_mem_uid_') === 0)) {
         var waitReady = token.indexOf('cloud_mem_uid_') === 0 && typeof cloud.waitForAuthReady === 'function'
@@ -1396,24 +1417,34 @@
       if (pathOnly === '/api/logout' && method === 'POST') {
         var shouldCloudOut = token.indexOf('cloud_') === 0 || (typeof cloud.isAdminSignedIn === 'function' && cloud.isAdminSignedIn());
         if (shouldCloudOut && typeof cloud.signOutCloud === 'function') cloud.signOutCloud().catch(function () {});
-        return Promise.resolve(handleStandaloneApi(url, init));
+        return Promise.resolve(jsonResp(200, { success: true }));
       }
-      if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login') {
+      if (pathOnly.indexOf('/api/admin/') === 0 && pathOnly !== '/api/admin/login' && pathOnly !== '/api/admin/google-login') {
         var isCloudToken = token.indexOf('cloud_adm_') === 0;
         var authWait = typeof cloud.waitForAuthReady === 'function' ? cloud.waitForAuthReady() : Promise.resolve();
         return authWait.then(function () {
           if (cloud.isAdminSignedIn()) {
             return cloud.handleAdminApi(pathOnly, method, body).then(function (cloudResp) {
-              return cloudResp ? jsonResp(cloudResp.status, cloudResp.data) : handleStandaloneApi(url, init);
+              if (cloudResp) return jsonResp(cloudResp.status, cloudResp.data);
+              return isHttp
+                ? jsonResp(503, { error: 'Live server connection required for this operation so all devices stay synchronized.' })
+                : handleStandaloneApi(url, init);
             });
           }
-          if (isCloudToken) {
-            return jsonResp(401, { error: 'Cloud administrator session expired. Please sign in with Google again.' });
+          if (isCloudToken || isHttp) {
+            return jsonResp(401, { error: 'Live database session expired. Please sign in again so changes save online for everyone.' });
           }
           return handleStandaloneApi(url, init);
         });
       }
     }
+
+    if (isHttp && (pathOnly.indexOf('/api/admin/') === 0 || (pathOnly.indexOf('/api/member/') === 0 && isMutation))) {
+      return Promise.resolve(jsonResp(503, {
+        error: 'Live online server unavailable. Changes were not saved locally because they must sync across all devices.'
+      }));
+    }
+
     return Promise.resolve(handleStandaloneApi(url, init));
   }
 
@@ -1433,12 +1464,7 @@
     var body = parseJsonBody(init);
     var token = getBearerToken(init && init.headers);
 
-    // Cloud-authenticated sessions route explicitly through Cloud Firestore
-    if (token.indexOf('cloud_') === 0 && window.ShimogyCloud) {
-      return tryCloudOrLocal(url, init, pathOnly, method, body, token, window.ShimogyCloud);
-    }
-
-    // Over HTTP/HTTPS, prefer live Express + Supabase PostgreSQL backend when reachable
+    // Over HTTP/HTTPS, ALWAYS use live Express + Supabase PostgreSQL as primary source of truth
     if (nativeFetch && window.location.protocol !== 'file:') {
       return nativeFetch(input, init)
         .then(function (res) {
@@ -1452,6 +1478,10 @@
         .catch(function () {
           return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
         });
+    }
+
+    if (token.indexOf('cloud_') === 0 && window.ShimogyCloud) {
+      return tryCloudOrLocal(url, init, pathOnly, method, body, token, window.ShimogyCloud);
     }
 
     return fallbackStaticServices(input, init, url, pathOnly, method, body, token);

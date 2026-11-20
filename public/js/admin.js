@@ -70,20 +70,57 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function getPreviewCaption(imgEl) {
+    var box = imgEl ? imgEl.closest('.img-preview-box') : null;
+    return box ? box.querySelector('.img-preview-caption') : null;
+  }
+
+  function setPreviewCaption(imgEl, msg, tone) {
+    var cap = getPreviewCaption(imgEl);
+    if (!cap) return;
+    if (!cap.dataset.defaultCaption) {
+      cap.dataset.defaultCaption = cap.textContent;
+    }
+    cap.textContent = msg || cap.dataset.defaultCaption;
+    cap.style.color = tone === 'error' ? 'var(--danger-text)' : (tone === 'ok' ? 'var(--success-text)' : '');
+  }
+
   function setPreviewImg(previewImgId, url, fallbackUrl) {
     var imgEl = document.getElementById(previewImgId);
     if (!imgEl) return;
-    var cleanUrl = String(url || '').trim();
-    imgEl.src = site.assetUrl(cleanUrl || fallbackUrl || 'assets/aistudio/logo2_be71428a.jpg');
+    imgEl.setAttribute('referrerpolicy', 'no-referrer');
+    var rawUrl = String(url || '').trim();
+    var sanitized = rawUrl ? site.sanitizeUrl(rawUrl, '') : '';
+    if (rawUrl && !sanitized) {
+      imgEl.dataset.fallbackMode = 'invalid';
+      imgEl.src = site.assetUrl(fallbackUrl || 'assets/aistudio/logo2_be71428a.jpg');
+      setPreviewCaption(imgEl, 'Enter a valid image link (https://...) or upload a file from your device.', 'error');
+      return;
+    }
+    imgEl.dataset.fallbackMode = sanitized ? 'custom' : 'default';
+    imgEl.src = site.assetUrl(sanitized || fallbackUrl || 'assets/aistudio/logo2_be71428a.jpg');
+    if (!sanitized) {
+      setPreviewCaption(imgEl, '', '');
+    }
   }
 
   function bindImagePreview(urlInputId, previewImgId, fallbackUrl) {
     var urlEl = document.getElementById(urlInputId);
     var imgEl = document.getElementById(previewImgId);
     if (!urlEl || !imgEl) return;
+    imgEl.setAttribute('referrerpolicy', 'no-referrer');
+    imgEl.addEventListener('load', function () {
+      if (imgEl.dataset.fallbackMode === 'custom') {
+        setPreviewCaption(imgEl, 'Image preview loaded and ready to save across all devices.', 'ok');
+      }
+    });
     imgEl.addEventListener('error', function () {
       var safeFallback = site.assetUrl(fallbackUrl);
+      if (imgEl.dataset.fallbackMode === 'custom') {
+        setPreviewCaption(imgEl, 'Unable to load that image URL — check that it is a direct public image link or upload a file.', 'error');
+      }
       if (fallbackUrl && imgEl.getAttribute('src') !== safeFallback) {
+        imgEl.dataset.fallbackMode = 'default';
         imgEl.src = safeFallback;
       }
     });
@@ -138,6 +175,8 @@
     fileEl.addEventListener('change', function () {
       var file = fileEl.files && fileEl.files[0];
       if (!file) return;
+      var previewEl = previewImgId ? document.getElementById(previewImgId) : null;
+      if (previewEl) setPreviewCaption(previewEl, 'Uploading image to database...', '');
       var reader = new FileReader();
       reader.onload = function () {
         compressImageDataUrl(reader.result, 900, 0.74, function (finalDataUrl) {
@@ -147,11 +186,16 @@
           })
             .then(function (res) {
               urlEl.value = res.url;
+              urlEl.dispatchEvent(new Event('change'));
               if (previewImgId) setPreviewImg(previewImgId, res.url, fallbackUrl);
-              showToast('Image saved to database successfully.', false);
+              showToast('Image uploaded to database and ready for all online visitors.', false);
             })
             .catch(function (err) {
+              if (previewEl) setPreviewCaption(previewEl, 'Upload failed: ' + err.message, 'error');
               showToast('Upload failed: ' + err.message, true);
+            })
+            .finally(function () {
+              fileEl.value = '';
             });
         });
       };
@@ -171,7 +215,12 @@
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
     document.querySelectorAll('.sidebar-link').forEach(function (l) { l.classList.remove('active'); });
     var target = document.getElementById(tabId);
-    if (target) target.classList.add('active');
+    if (target) {
+      target.classList.add('active');
+      if (site && typeof site.observeReveals === 'function') {
+        site.observeReveals(target);
+      }
+    }
     var activeBtn = document.querySelector('.sidebar-link[data-tab="' + tabId + '"]');
     if (activeBtn) {
       activeBtn.classList.add('active');
@@ -436,7 +485,7 @@
       return (
         '<tr>' +
           '<td class="tabular-nums">' + site.escapeHtml(h.sort_order) + '</td>' +
-          '<td><img src="' + site.escapeHtml(site.assetUrl(h.image_url)) + '" alt="' + site.escapeHtml(h.image_alt) + '" width="72" height="44" style="object-fit:cover;border-radius:4px;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(h.image_url)) + '" alt="' + site.escapeHtml(h.image_alt) + '" width="72" height="44" referrerpolicy="no-referrer" style="object-fit:cover;border-radius:4px;" /></td>' +
           '<td><strong>' + site.escapeHtml(h.title) + '</strong></td>' +
           '<td>' + site.escapeHtml(h.cta_text) + '</td>' +
           '<td><div class="table-actions">' +
@@ -485,10 +534,10 @@
     tbody.innerHTML = state.testimonials.map(function (t) {
       return (
         '<tr>' +
-          '<td><img src="' + site.escapeHtml(site.assetUrl(t.photo_url)) + '" alt="' + site.escapeHtml(t.photo_alt) + '" width="44" height="44" style="object-fit:cover;border-radius:50%;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(t.photo_url)) + '" alt="' + site.escapeHtml(t.photo_alt) + '" width="44" height="44" referrerpolicy="no-referrer" style="object-fit:cover;border-radius:50%;" /></td>' +
           '<td><strong>' + site.escapeHtml(t.client_name) + '</strong></td>' +
           '<td>' + site.escapeHtml(t.role) + ' · ' + site.escapeHtml(t.location) + '</td>' +
-          '<td style="max-width:300px;">' + site.escapeHtml(t.quote) + '</td>' +
+          '<td style="max-width:300px;overflow-wrap:anywhere;word-break:break-word;">' + site.escapeHtml(t.quote) + '</td>' +
           '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-outline btn-sm edit-test-btn" data-id="' + t.id + '">Edit</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-test-btn" data-id="' + t.id + '">Delete</button>' +
@@ -581,7 +630,7 @@
     tbody.innerHTML = state.publicCycles.map(function (c) {
       return (
         '<tr>' +
-          '<td><img src="' + site.escapeHtml(site.assetUrl(c.image_url)) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" width="64" height="40" style="object-fit:cover;border-radius:4px;" /></td>' +
+          '<td><img src="' + site.escapeHtml(site.assetUrl(c.image_url)) + '" alt="' + site.escapeHtml(c.image_alt || c.name) + '" width="64" height="40" referrerpolicy="no-referrer" style="object-fit:cover;border-radius:4px;" /></td>' +
           '<td><strong>' + site.escapeHtml(c.name) + '</strong></td>' +
           '<td class="tabular-nums">' + site.formatUGX(c.contribution) + '</td>' +
           '<td>' + site.escapeHtml(c.payout_duration) + '</td>' +
@@ -1002,7 +1051,7 @@
           '<td>' + site.escapeHtml(r.request_type) + '</td>' +
           '<td><strong>' + site.escapeHtml(r.applicant_name) + '</strong></td>' +
           '<td class="font-mono-num">' + site.escapeHtml(r.applicant_phone) + '</td>' +
-          '<td style="max-width:260px;font-size:0.82rem;">' + site.escapeHtml(r.details_json) + '</td>' +
+          '<td style="max-width:260px;font-size:0.82rem;overflow-wrap:anywhere;word-break:break-word;">' + site.escapeHtml(r.details_json) + '</td>' +
           '<td>' + (r.age_confirmed ? 'Confirmed' : 'Pending') + (r.guardian_name ? ' (Guardian: ' + site.escapeHtml(r.guardian_name) + ')' : '') + '</td>' +
           '<td>' + site.escapeHtml(r.status) + '</td>' +
           '<td><div class="table-actions">' +
@@ -1042,7 +1091,7 @@
           '<td>' + site.escapeHtml(d.full_name) + '</td>' +
           '<td class="font-mono-num">' + site.escapeHtml(d.phone) + '</td>' +
           '<td>' + site.escapeHtml(d.email || '--') + '</td>' +
-          '<td>' + site.escapeHtml(d.reason || '--') + '</td>' +
+          '<td style="max-width:240px;overflow-wrap:anywhere;word-break:break-word;">' + site.escapeHtml(d.reason || '--') + '</td>' +
           '<td>' + site.escapeHtml(d.status) + '</td>' +
           '<td><div class="table-actions">' +
             '<button type="button" class="btn btn-danger btn-sm del-purge-btn" data-id="' + d.id + '">Purge Client Data</button>' +
@@ -1175,6 +1224,27 @@
     connectBtn.style.display = signedIn ? 'none' : 'inline-flex';
   }
 
+  function exchangeAdminGoogleToken(idToken, fallbackCloudToken) {
+    if (window.location.protocol !== 'file:' && idToken) {
+      return site.apiFetch('/api/admin/google-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: idToken })
+      })
+        .then(function (r) {
+          return r.text().then(function (txt) {
+            var d = {};
+            try { d = txt ? JSON.parse(txt) : {}; } catch (_e) { d = {}; }
+            if (!r.ok) {
+              throw new Error(d.error || 'Google account could not be verified with live database.');
+            }
+            return d.token;
+          });
+        });
+    }
+    return Promise.resolve(fallbackCloudToken);
+  }
+
   function handleGoogleAdminSignIn() {
     var fb = document.getElementById('adminLoginFeedback');
     if (fb) fb.innerHTML = '';
@@ -1183,12 +1253,20 @@
       else showToast('Google Cloud Sign-In is unavailable offline.', true);
       return;
     }
+    var existingToken = getToken();
+    var hadLivePgToken = existingToken && existingToken.indexOf('cloud_') !== 0;
     window.ShimogyCloud.signInAdminWithGoogle()
       .then(function (res) {
-        setToken(res.token);
-        syncCloudButtonVisibility();
-        loadOverview(true);
-        showToast('Signed in with Google Cloud Sync. All edits are now live worldwide.', false);
+        return exchangeAdminGoogleToken(res && res.idToken, res && res.token).then(function (liveToken) {
+          if (liveToken) {
+            setToken(liveToken);
+          } else if (!hadLivePgToken && res && res.token) {
+            setToken(res.token);
+          }
+          syncCloudButtonVisibility();
+          loadOverview(true);
+          showToast('Signed in with Google. All edits save live to the central database across all devices.', false);
+        });
       })
       .catch(function (err) {
         var msg = (err && err.message) || 'Google Sign-In failed.';
@@ -1695,8 +1773,21 @@
     var detail = (e && e.detail) || {};
     syncCloudButtonVisibility();
     if (detail.isAdmin && detail.user && !getToken()) {
-      setToken('cloud_adm_' + detail.user.uid);
-      loadOverview(false);
+      var cloudToken = 'cloud_adm_' + detail.user.uid;
+      if (window.location.protocol !== 'file:' && window.ShimogyCloud && typeof window.ShimogyCloud.getIdToken === 'function') {
+        window.ShimogyCloud.getIdToken()
+          .then(function (idToken) { return exchangeAdminGoogleToken(idToken, cloudToken); })
+          .then(function (liveToken) {
+            if (liveToken) {
+              setToken(liveToken);
+              loadOverview(false);
+            }
+          })
+          .catch(function () {});
+      } else {
+        setToken(cloudToken);
+        loadOverview(false);
+      }
     }
   });
 

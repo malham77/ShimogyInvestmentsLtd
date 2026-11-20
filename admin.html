@@ -45,8 +45,8 @@
         </div>
         <div class="form-field">
           <label for="adminPasswordInput">Password</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="password" id="adminPasswordInput" required placeholder="Enter administrator password" autocomplete="current-password" style="flex:1;" />
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="password" id="adminPasswordInput" required placeholder="Enter administrator password" autocomplete="current-password" style="flex:1 1 180px;min-width:0;" />
             <button type="button" id="toggleAdminPassBtn" class="btn btn-outline btn-sm" aria-pressed="false" style="min-height:44px;">Show</button>
           </div>
         </div>
@@ -54,7 +54,7 @@
         <button type="submit" class="btn btn-primary btn-full">Sign In to Console</button>
       </form>
 
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;font-size:0.84rem;">
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-size:0.84rem;">
         <a href="index.html" style="color:var(--blue-primary);text-decoration:none;font-weight:600;">Return to Public Website</a>
         <a href="dashboard.html" style="color:var(--text-muted);text-decoration:none;">Client Portal</a>
       </div>
@@ -249,7 +249,7 @@
                 <span class="img-preview-caption">Live Hero Image Preview — paste a live URL above or upload a file directly into the database.</span>
               </div>
               <div class="form-field"><label for="heroSubtitle">Subtitle Paragraph</label><textarea id="heroSubtitle" required></textarea></div>
-              <div style="display:flex;gap:10px;">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-primary">Save Hero Slide</button>
                 <button type="button" id="cancelHeroEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
               </div>
@@ -288,7 +288,7 @@
               </div>
               <div class="form-field"><label for="testPhotoAlt">Photo Alt Text</label><input type="text" id="testPhotoAlt" placeholder="Portrait of verified SHIMOGY client" /></div>
               <div class="form-field"><label for="testQuote">Client Quote</label><textarea id="testQuote" required></textarea></div>
-              <div style="display:flex;gap:10px;">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-primary">Save Testimonial</button>
                 <button type="button" id="cancelTestEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
               </div>
@@ -336,7 +336,7 @@
               </div>
               <div class="form-field"><label for="planImageAlt">Image Alt Text</label><input type="text" id="planImageAlt" placeholder="Descriptive image alt text" /></div>
               <div class="form-field"><label for="planDescription">Plan Description</label><textarea id="planDescription"></textarea></div>
-              <div style="display:flex;gap:10px;">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-primary">Save Investment Plan</button>
                 <button type="button" id="cancelPlanEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
               </div>
@@ -382,7 +382,7 @@
                 <span class="img-preview-caption">Live Public Cycle Image Preview</span>
               </div>
               <div class="form-field"><label for="pubCycleDesc">Cycle Description</label><textarea id="pubCycleDesc"></textarea></div>
-              <div style="display:flex;gap:10px;">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-primary">Save Public Cycle</button>
                 <button type="button" id="cancelPubCycleEditBtn" class="btn btn-outline" style="display:none;">Cancel Edit</button>
               </div>
@@ -721,8 +721,8 @@
                 </div>
                 <div class="form-field">
                   <label for="secAdminPass">New Password (minimum 6 characters)</label>
-                  <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="password" id="secAdminPass" name="sec_admin_new_pass" minlength="6" autocomplete="new-password" data-lpignore="true" placeholder="Leave blank to keep current password" style="flex:1;" />
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <input type="password" id="secAdminPass" name="sec_admin_new_pass" minlength="6" autocomplete="new-password" data-lpignore="true" placeholder="Leave blank to keep current password" style="flex:1 1 180px;min-width:0;" />
                     <button type="button" id="secAdminPassToggle" class="btn btn-outline btn-sm" aria-pressed="false" style="min-height:44px;">Show</button>
                   </div>
                 </div>

@@ -182,7 +182,7 @@
             <div class="section-label">Top Story</div>
             <div class="hero-story" id="heroStory">
               <button type="button" class="hero-main" id="heroMain" aria-label="Open top story details">
-                <img id="heroMainImg" src="assets/aistudio/graph_ddbd7244.jpg" alt="" class="hero-card-img" aria-hidden="true" />
+                <img id="heroMainImg" src="assets/aistudio/graph_ddbd7244.jpg" alt="" class="hero-card-img" referrerpolicy="no-referrer" aria-hidden="true" />
                 <div class="hero-overlay">
                   <span class="story-tag tag-news" id="heroTag">NEWS</span>
                   <h2 id="heroTitle">Loading latest bulletin...</h2>
@@ -280,7 +280,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
-      <img id="storyModalImage" src="assets/aistudio/graph_ddbd7244.jpg" alt="" style="width:100%;height:220px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:14px;" />
+      <img id="storyModalImage" src="assets/aistudio/graph_ddbd7244.jpg" alt="" referrerpolicy="no-referrer" style="width:100%;height:220px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:14px;" />
       <p id="storyModalDate" class="metric-label" style="margin-bottom:10px;"></p>
       <p id="storyModalBody" style="font-size:0.96rem;color:var(--text-secondary);line-height:1.72;margin-bottom:18px;"></p>
       <div style="display:flex;justify-content:flex-end;">
@@ -414,21 +414,25 @@
 
       function updateTicker(customText) {
         var el = document.getElementById('tickerText');
+        if (!el) return;
         var cleanCustom = String(customText || '').trim();
+        var baseUnit = '';
         if (cleanCustom) {
-          el.innerHTML = '<span class="ticker-item">' + site.escapeHtml(cleanCustom) + '</span>';
-          return;
+          baseUnit = '<span class="ticker-item">' + site.escapeHtml(cleanCustom) + '</span>';
+        } else if (!allUpdates.length) {
+          baseUnit = '<span class="ticker-item">Welcome to SHIMOGY Investment Group Ltd — Latest client stories, community savings updates, and verified venture openings in Kampala.</span>';
+        } else {
+          baseUnit = allUpdates.slice(0, 10).map(function (u) {
+            return '<span class="ticker-item"><strong>' + site.escapeHtml(u.title) + '</strong>' +
+              (u.excerpt ? ' &mdash; ' + site.escapeHtml(u.excerpt) : '') + '</span>';
+          }).join('<span class="ticker-sep" aria-hidden="true">|</span>');
         }
-        if (!allUpdates.length) {
-          el.textContent = 'Welcome to SHIMOGY Investment Group Ltd — Latest client stories, community savings updates, and verified venture openings in Kampala.';
-          return;
-        }
-        var items = allUpdates.slice(0, 10).map(function (u) {
-          return '<span class="ticker-item"><strong>' + site.escapeHtml(u.title) + '</strong>' +
-            (u.excerpt ? ' &mdash; ' + site.escapeHtml(u.excerpt) : '') + '</span>';
-        }).join('<span class="ticker-sep" aria-hidden="true">|</span>');
-        el.innerHTML = items;
+        var sep = '<span class="ticker-sep" aria-hidden="true">|</span>';
+        var halfTrack = baseUnit + sep + baseUnit + sep + baseUnit + sep;
+        el.innerHTML = halfTrack + halfTrack;
       }
+
+      updateTicker('');
 
       function updateSidebarCounts() {
         document.getElementById('countAll').textContent = String(allUpdates.length);
@@ -472,7 +476,7 @@
         heroSide.innerHTML = sideStories.map(function (s, idx) {
           return (
             '<button type="button" class="hero-side-card" data-side-idx="' + idx + '">' +
-              '<img src="' + site.escapeHtml(site.assetUrl(s.image_url)) + '" alt="' + site.escapeHtml(s.image_alt || s.title) + '" class="hero-card-img" loading="lazy" />' +
+              '<img src="' + site.escapeHtml(site.assetUrl(s.image_url)) + '" alt="' + site.escapeHtml(s.image_alt || s.title) + '" class="hero-card-img" referrerpolicy="no-referrer" loading="lazy" />' +
               '<div class="side-overlay">' +
                 '<span class="story-tag ' + tagClass(s.category) + '">' + site.escapeHtml((s.category || 'news').toUpperCase()) + '</span>' +
                 '<h3>' + site.escapeHtml(s.title) + '</h3>' +
@@ -499,7 +503,7 @@
             return (
               '<article class="news-card">' +
                 '<div class="news-card-img-wrap">' +
-                  '<img src="' + site.escapeHtml(site.assetUrl(u.image_url)) + '" alt="' + site.escapeHtml(u.image_alt || u.title) + '" class="news-card-img" loading="lazy" />' +
+                  '<img src="' + site.escapeHtml(site.assetUrl(u.image_url)) + '" alt="' + site.escapeHtml(u.image_alt || u.title) + '" class="news-card-img" referrerpolicy="no-referrer" loading="lazy" />' +
                   '<span class="story-tag ' + tagClass(u.category) + '">' + site.escapeHtml((u.category || 'news').toUpperCase()) + '</span>' +
                 '</div>' +
                 '<div class="news-card-body">' +

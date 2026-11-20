@@ -66,15 +66,45 @@ export function sanitizeUrl(url: string, fallback = ''): string {
   ) {
     return fallback;
   }
-  if (
-    clean.startsWith('/') ||
-    clean.startsWith('assets/') ||
-    clean.startsWith('https://') ||
-    clean.startsWith('http://') ||
-    clean.startsWith('data:image/') ||
-    /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(clean)
+
+  let candidate = clean;
+  if (candidate.startsWith('//')) {
+    candidate = 'https:' + candidate;
+  } else if (
+    !candidate.startsWith('/') &&
+    !candidate.startsWith('assets/') &&
+    !candidate.startsWith('https://') &&
+    !candidate.startsWith('http://') &&
+    !candidate.startsWith('mailto:') &&
+    !candidate.startsWith('tel:') &&
+    !candidate.startsWith('data:image/') &&
+    !/^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(candidate) &&
+    /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\/|$|\?)/.test(candidate)
   ) {
-    return clean;
+    candidate = 'https://' + candidate;
+  }
+
+  // Convert Google Drive share links into direct viewable image URLs
+  const driveFileMatch = candidate.match(/^https?:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+  if (driveFileMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveFileMatch[1]}&sz=w1200`;
+  }
+  const driveOpenMatch = candidate.match(/^https?:\/\/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([a-zA-Z0-9_-]+)/i);
+  if (driveOpenMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveOpenMatch[1]}&sz=w1200`;
+  }
+
+  if (
+    candidate.startsWith('/') ||
+    candidate.startsWith('assets/') ||
+    candidate.startsWith('https://') ||
+    candidate.startsWith('http://') ||
+    candidate.startsWith('mailto:') ||
+    candidate.startsWith('tel:') ||
+    candidate.startsWith('data:image/') ||
+    /^[a-zA-Z0-9._-]+\.html([#?].*)?$/.test(candidate)
+  ) {
+    return candidate;
   }
   return fallback;
 }

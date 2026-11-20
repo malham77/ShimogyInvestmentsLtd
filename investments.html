@@ -411,7 +411,7 @@
                   '<div><span class="metric-label">Investment Amount</span><span class="metric-value tabular-nums">' + site.formatUGX(p.price) + '</span></div>' +
                   '<div><span class="metric-label">Projected Payout</span><span class="metric-value return tabular-nums">' + site.formatUGX(p.expected_return) + '</span></div>' +
                 '</div>' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:6px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:6px;">' +
                   '<span class="status-text ' + (isFull ? 'status-closed' : 'status-active') + '">' + (isFull ? 'Slots Filled' : Number(p.slots_left) + ' Slots Remaining') + '</span>' +
                   (isFull
                     ? '<button type="button" class="btn btn-outline btn-sm" disabled>Slots Full</button>'

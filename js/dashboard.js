@@ -382,6 +382,23 @@
       });
   });
 
+  function exchangeMemberGoogleToken(idToken) {
+    return site.apiFetch('/api/member/google-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: idToken })
+    }).then(function (r) {
+      return r.text().then(function (txt) {
+        var d = {};
+        try { d = txt ? JSON.parse(txt) : {}; } catch (_e) { d = {}; }
+        if (!r.ok) {
+          throw new Error(d.error || 'No SHIMOGY client account matches this Google email.');
+        }
+        return d;
+      });
+    });
+  }
+
   var googleMemberBtn = document.getElementById('googleMemberLoginBtn');
   if (googleMemberBtn) {
     googleMemberBtn.addEventListener('click', function () {
@@ -394,6 +411,13 @@
       googleMemberBtn.disabled = true;
       window.ShimogyCloud.signInMemberWithGoogle()
         .then(function (res) {
+          if (window.location.protocol !== 'file:' && res && res.idToken) {
+            return exchangeMemberGoogleToken(res.idToken).then(function (pgRes) {
+              setToken(pgRes.token);
+              if (pgRes.member) renderMember(pgRes.member);
+              else loadMemberProfile();
+            });
+          }
           setToken(res.token);
           if (res.member) renderMember(res.member);
           else loadMemberProfile();
@@ -525,14 +549,29 @@
 
   window.addEventListener('shimogy:cloud-auth', function (e) {
     var detail = (e && e.detail) || {};
-    if (detail.user && !detail.isAdmin && !getToken() && window.ShimogyCloud && typeof window.ShimogyCloud.fetchMemberSessionFromCloud === 'function') {
-      var cloudToken = 'cloud_mem_uid_' + detail.user.uid;
-      window.ShimogyCloud.fetchMemberSessionFromCloud(cloudToken).then(function (res) {
-        if (res && res.member) {
-          setToken(cloudToken);
-          renderMember(res.member);
-        }
-      }).catch(function () {});
+    if (detail.user && !detail.isAdmin && !getToken() && window.ShimogyCloud) {
+      if (window.location.protocol !== 'file:' && typeof window.ShimogyCloud.getIdToken === 'function') {
+        window.ShimogyCloud.getIdToken()
+          .then(function (idToken) { return idToken ? exchangeMemberGoogleToken(idToken) : null; })
+          .then(function (pgRes) {
+            if (pgRes && pgRes.token) {
+              setToken(pgRes.token);
+              if (pgRes.member) renderMember(pgRes.member);
+              else loadMemberProfile();
+            }
+          })
+          .catch(function () {});
+        return;
+      }
+      if (typeof window.ShimogyCloud.fetchMemberSessionFromCloud === 'function') {
+        var cloudToken = 'cloud_mem_uid_' + detail.user.uid;
+        window.ShimogyCloud.fetchMemberSessionFromCloud(cloudToken).then(function (res) {
+          if (res && res.member) {
+            setToken(cloudToken);
+            renderMember(res.member);
+          }
+        }).catch(function () {});
+      }
     }
   });
 

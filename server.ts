@@ -35,7 +35,7 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Security Headers (compatible with iframe preview, Google Auth popups, Supabase REST, Leaflet & Google Fonts)
+// Security Headers (compatible with iframe preview, Google Auth popups, Supabase REST, external images & Leaflet)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -52,13 +52,18 @@ app.use((req, res, next) => {
       "script-src 'self' 'unsafe-inline' https://unpkg.com https://apis.google.com https://www.gstatic.com https://*.firebaseapp.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https:",
+      "img-src 'self' data: blob: https: http:",
       "connect-src 'self' https://ihgfsvkcpgxklotjmokl.supabase.co https://*.supabase.co https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.tile.openstreetmap.org",
       "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.google.com",
       "object-src 'none'",
       "base-uri 'self'"
     ].join('; ')
   );
+  if (req.path.startsWith('/api/') && !req.path.startsWith('/api/media/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   next();
 });
 
@@ -216,6 +221,47 @@ async function getFullMemberProfile(memberId: number) {
   };
 }
 
+let cachedFirebaseApiKey = '';
+function getFirebaseWebApiKey(): string {
+  if (cachedFirebaseApiKey) return cachedFirebaseApiKey;
+  if (process.env.FIREBASE_WEB_API_KEY) {
+    cachedFirebaseApiKey = String(process.env.FIREBASE_WEB_API_KEY).trim();
+    return cachedFirebaseApiKey;
+  }
+  try {
+    const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      if (cfg && cfg.apiKey) {
+        cachedFirebaseApiKey = String(cfg.apiKey).trim();
+        return cachedFirebaseApiKey;
+      }
+    }
+  } catch (_e) {}
+  return '';
+}
+
+async function verifyFirebaseGoogleIdToken(idToken: string): Promise<{ uid: string; email: string; emailVerified: boolean; name: string } | null> {
+  const apiKey = getFirebaseWebApiKey();
+  const cleanToken = String(idToken || '').trim();
+  if (!apiKey || !cleanToken) return null;
+  const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: cleanToken })
+  });
+  if (!resp.ok) return null;
+  const data = (await resp.json()) as { users?: Array<{ localId?: string; email?: string; emailVerified?: boolean; displayName?: string }> };
+  const u = data && Array.isArray(data.users) ? data.users[0] : null;
+  if (!u || !u.email || !u.emailVerified) return null;
+  return {
+    uid: String(u.localId || ''),
+    email: String(u.email).trim().toLowerCase(),
+    emailVerified: Boolean(u.emailVerified),
+    name: String(u.displayName || '').trim()
+  };
+}
+
 // ============================================================
 // PUBLIC API ROUTES
 // ============================================================
@@ -340,6 +386,36 @@ app.post(
   })
 );
 
+app.post(
+  '/api/member/google-login',
+  loginLimiter,
+  asyncHandler(async (req, res) => {
+    const { idToken } = req.body || {};
+    if (!idToken) {
+      res.status(400).json({ error: 'Google verification token is required.' });
+      return;
+    }
+    const gUser = await verifyFirebaseGoogleIdToken(String(idToken));
+    if (!gUser) {
+      res.status(401).json({ error: 'Unable to verify your Google account. Please try again.' });
+      return;
+    }
+    const member = await db.get<Record<string, any>>(
+      'SELECT * FROM members WHERE lower(email) = lower(?) LIMIT 1',
+      [gUser.email]
+    );
+    if (!member) {
+      res.status(404).json({
+        error: `No SHIMOGY client account is linked to ${gUser.email}. Please sign in with your registered Phone Number & Password or ask Operations to add your Gmail to your profile.`
+      });
+      return;
+    }
+    const token = await createSession('member', Number(member.id), member.phone);
+    const profile = await getFullMemberProfile(Number(member.id));
+    res.json({ token, member: profile || sanitizeMember(member) });
+  })
+);
+
 app.get(
   '/api/member/me',
   requireMemberOrAdmin,
@@ -458,6 +534,48 @@ app.post(
   })
 );
 
+app.post(
+  '/api/admin/google-login',
+  loginLimiter,
+  asyncHandler(async (req, res) => {
+    const { idToken } = req.body || {};
+    if (!idToken) {
+      res.status(400).json({ error: 'Google verification token is required.' });
+      return;
+    }
+    const gUser = await verifyFirebaseGoogleIdToken(String(idToken));
+    if (!gUser) {
+      res.status(401).json({ error: 'Unable to verify your Google account. Please sign in again.' });
+      return;
+    }
+    const bootstrappedEmails = new Set([
+      'mal77ham@gmail.com',
+      'maleham06@gmail.com',
+      String(process.env.ADMIN_EMAIL || 'admin@shimogy.com').trim().toLowerCase()
+    ]);
+    let admin = await db.get<Record<string, any>>(
+      'SELECT * FROM admin_users WHERE lower(email) = lower(?)',
+      [gUser.email]
+    );
+    if (!admin && bootstrappedEmails.has(gUser.email)) {
+      const randomPass = crypto.randomBytes(24).toString('hex');
+      const info = await db.run(
+        'INSERT INTO admin_users (email, name, password_hash) VALUES (?, ?, ?)',
+        [gUser.email, gUser.name || 'SHIMOGY Administrator', hashPassword(randomPass)]
+      );
+      admin = await db.get<Record<string, any>>('SELECT * FROM admin_users WHERE id = ?', [info.lastInsertRowid]);
+    }
+    if (!admin) {
+      res.status(403).json({
+        error: `This Google account (${gUser.email}) is not authorized as a SHIMOGY administrator.`
+      });
+      return;
+    }
+    const token = await createSession('admin', Number(admin.id), admin.email);
+    res.json({ token, admin: { id: admin.id, email: admin.email, name: admin.name } });
+  })
+);
+
 app.get(
   '/api/admin/me',
   requireAdmin,
@@ -489,9 +607,10 @@ app.post(
       return;
     }
 
+    const adminId = Number(req.authSession!.user_id);
     const currentAdmin = await db.get<{ id: number; email: string }>(
       'SELECT id, email FROM admin_users WHERE id = ?',
-      [req.authSession!.user_id]
+      [adminId]
     );
     if (!currentAdmin) {
       res.status(404).json({ error: 'Administrator account not found.' });
@@ -502,7 +621,7 @@ app.post(
     if (cleanEmail && cleanEmail !== finalEmail) {
       const conflict = await db.get<{ id: number }>(
         'SELECT id FROM admin_users WHERE lower(email) = lower(?) AND id <> ?',
-        [cleanEmail, req.authSession!.user_id]
+        [cleanEmail, adminId]
       );
       if (conflict) {
         res.status(409).json({
@@ -511,17 +630,23 @@ app.post(
         });
         return;
       }
-      await db.run('UPDATE admin_users SET email = ? WHERE id = ?', [cleanEmail, req.authSession!.user_id]);
-      await db.run('UPDATE auth_sessions SET identifier = ? WHERE token = ?', [cleanEmail, req.authSession!.token]);
-      finalEmail = cleanEmail;
     }
 
-    if (cleanPass) {
-      await db.run('UPDATE admin_users SET password_hash = ? WHERE id = ?', [
-        hashPassword(cleanPass),
-        req.authSession!.user_id
-      ]);
-    }
+    await db.transaction(async (tx) => {
+      if (cleanEmail && cleanEmail !== finalEmail) {
+        await tx.run('UPDATE admin_users SET email = ? WHERE id = ?', [cleanEmail, adminId]);
+        await tx.run('UPDATE auth_sessions SET identifier = ? WHERE token = ?', [cleanEmail, req.authSession!.token]);
+        finalEmail = cleanEmail;
+      }
+
+      if (cleanPass) {
+        await tx.run('UPDATE admin_users SET password_hash = ? WHERE id = ?', [
+          hashPassword(cleanPass),
+          adminId
+        ]);
+      }
+    });
+
     res.json({ success: true, email: finalEmail });
   })
 );
@@ -639,18 +764,29 @@ app.get(
       res.status(400).send('Invalid media ID');
       return;
     }
-    const row = await db.get<{ filename: string; mime_type: string; data: Buffer }>(
+    const row = await db.get<{ filename: string; mime_type: string; data: Buffer | Uint8Array | string }>(
       'SELECT filename, mime_type, data FROM media_files WHERE id = ?',
       [id]
     );
-    if (!row) {
+    if (!row || !row.data) {
       res.status(404).send('Media not found');
       return;
     }
-    res.setHeader('Content-Type', row.mime_type);
+    let bodyBuf: Buffer;
+    if (Buffer.isBuffer(row.data)) {
+      bodyBuf = row.data;
+    } else if (typeof row.data === 'string' && row.data.startsWith('\\x')) {
+      bodyBuf = Buffer.from(row.data.slice(2), 'hex');
+    } else if (typeof row.data === 'string') {
+      bodyBuf = Buffer.from(row.data, 'base64');
+    } else {
+      bodyBuf = Buffer.from(row.data);
+    }
+    res.setHeader('Content-Type', row.mime_type || 'image/jpeg');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(row.data);
+    res.send(bodyBuf);
   })
 );
 
