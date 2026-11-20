@@ -430,6 +430,9 @@
         var sep = '<span class="ticker-sep" aria-hidden="true">|</span>';
         var halfTrack = baseUnit + sep + baseUnit + sep + baseUnit + sep;
         el.innerHTML = halfTrack + halfTrack;
+        var textLen = (el.textContent || '').trim().length;
+        var calmDuration = Math.max(56, Math.min(120, Math.round(textLen * 0.22)));
+        el.style.animationDuration = calmDuration + 's';
       }
 
       updateTicker('');

@@ -646,12 +646,16 @@
     }
 
     if (pathOnly === '/api/member/login' && method === 'POST') {
-      var norm = normalizePhone(body.phone || '');
+      var rawIdent = String(body.email || body.phone || body.identifier || '').trim();
+      var norm = normalizePhone(rawIdent);
       var mem = db.members.find(function (m) {
-        return m.phone === norm || m.phone === String(body.phone || '').trim();
+        if (rawIdent.indexOf('@') !== -1) {
+          return String(m.email || '').trim().toLowerCase() === rawIdent.toLowerCase();
+        }
+        return m.phone === norm || m.phone === rawIdent;
       });
       if (!mem || mem.pass !== String(body.password || '')) {
-        return jsonResp(401, { error: 'Invalid phone number or password.' });
+        return jsonResp(401, { error: 'Invalid phone/email or password.' });
       }
       var mTok = makeToken('mem');
       db.sessions[mTok] = { token: mTok, role: 'member', user_id: mem.id, identifier: mem.phone };
@@ -1515,7 +1519,16 @@
     var sb = window.ShimogySupabase;
     var cloud = window.ShimogyCloud;
 
-    // 1. Static host Supabase REST bridge (Cloudflare Pages / public catalog + request submissions)
+    // 1. Live Supabase Auth + PostgREST bridge (all devices, static hosts, Cloudflare Pages, Shared URLs)
+    if (sb && typeof sb.handleApi === 'function' && sb.isConfigured()) {
+      return sb.handleApi(url, method, body, token).then(function (sbResp) {
+        if (sbResp && typeof sbResp.status === 'number') {
+          return jsonResp(sbResp.status, sbResp.data);
+        }
+        return tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud);
+      });
+    }
+
     if (sb && typeof sb.isConfigured === 'function' && sb.isConfigured() && sb.isSchemaReady()) {
       if (pathOnly === '/api/site-data' && method === 'GET') {
         return sb.getPublicSiteData().then(function (sbData) {
@@ -1552,16 +1565,15 @@
   function tryCloudOrLocal(url, init, pathOnly, method, body, token, cloud) {
     var isHttp = typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:';
 
-    // Over HTTP/HTTPS, NEVER route Admin or Client Portal operations to Firebase Firestore or localStorage:
-    // Supabase PostgreSQL via Express (/api/*) is the single live source of truth across all devices.
+    // Over HTTP/HTTPS, NEVER fall back to localStorage for Admin or Client Portal operations.
     if (isHttp) {
       if (pathOnly === '/api/site-data' && method === 'GET' && cloud && typeof cloud.getPublicSiteData === 'function') {
         return cloud.getPublicSiteData()
           .then(function (cloudData) {
-            return cloudData ? jsonResp(200, cloudData) : jsonResp(503, { error: 'Unable to reach live database.' });
+            return cloudData ? jsonResp(200, cloudData) : jsonResp(503, { error: 'Unable to reach live Supabase database.' });
           })
           .catch(function () {
-            return jsonResp(503, { error: 'Unable to reach live database.' });
+            return jsonResp(503, { error: 'Unable to reach live Supabase database.' });
           });
       }
       if (pathOnly === '/api/logout' && method === 'POST') {
@@ -1569,7 +1581,7 @@
         return Promise.resolve(jsonResp(200, { success: true }));
       }
       return Promise.resolve(jsonResp(503, {
-        error: 'Live server connection could not be reached right now. Please wait a moment and try again.'
+        error: 'Unable to reach Supabase or the live API server right now. Check your internet connection and try again.'
       }));
     }
 
@@ -1597,7 +1609,7 @@
           .catch(function () { return handleStandaloneApi(url, init); });
       }
       if (pathOnly === '/api/member/login' && method === 'POST') {
-        return cloud.loginMemberByPhonePassword(body.phone || '', body.password || '')
+        return cloud.loginMemberByPhonePassword(body.phone || body.email || '', body.password || '')
           .then(function (cloudRes) { return cloudRes ? jsonResp(200, cloudRes) : handleStandaloneApi(url, init); })
           .catch(function () { return handleStandaloneApi(url, init); });
       }
@@ -1636,13 +1648,13 @@
   }
 
   function fetchWithRetry(input, init, attempt) {
-    var retryDelays = [450, 1000];
+    var retryDelays = [350];
     return nativeFetch(input, init)
       .then(function (res) {
         var ct = (res.headers && res.headers.get('content-type')) || '';
         var isJson = ct.indexOf('application/json') !== -1 || ct.indexOf('application/sql') !== -1;
-        var shouldRetry = !isJson || res.status === 502 || res.status === 503 || res.status === 504;
-        if (shouldRetry && attempt < retryDelays.length) {
+        var shouldRetry = (res.status === 502 || res.status === 503 || res.status === 504) && attempt < retryDelays.length;
+        if (shouldRetry) {
           return delayMs(retryDelays[attempt]).then(function () {
             return fetchWithRetry(input, init, attempt + 1);
           });
@@ -1675,12 +1687,12 @@
     var body = parseJsonBody(init);
     var token = getBearerToken(init && init.headers);
 
-    // Over HTTP/HTTPS, ALWAYS use live Express + Supabase PostgreSQL as primary source of truth
+    // If explicitly carrying a Supabase Auth JWT, try Express first (when present) and fall back seamlessly to Supabase PostgREST
     if (nativeFetch && window.location.protocol !== 'file:') {
       return fetchWithRetry(input, init, 0)
         .then(function (outcome) {
           var res = outcome.res;
-          if (!outcome.isJson || res.status === 405 || res.status >= 502) {
+          if (!outcome.isJson || res.status === 404 || res.status === 405 || res.status >= 502) {
             return fallbackStaticServices(input, init, url, pathOnly, method, body, token);
           }
           return res;

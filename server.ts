@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DatabaseManager,
+  SUPABASE_ANON_KEY,
   SUPABASE_URL,
   computeLoanReturnDate,
   computeReturnsDate,
@@ -146,6 +147,37 @@ async function getSessionFromHeader(req: Request) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!token) return null;
+
+  if (token.startsWith('sb_adm_') || token.startsWith('sb_mem_')) {
+    const isAdm = token.startsWith('sb_adm_');
+    const jwt = token.slice(7).trim();
+    const sbUser = await verifySupabaseAccessToken(jwt);
+    if (!sbUser || !sbUser.email) return null;
+
+    if (isAdm) {
+      const admin = await ensureAdminRowForEmail(sbUser.email, sbUser.name, sbUser.isMetadataAdmin);
+      if (!admin) return null;
+      return {
+        token,
+        role: 'admin',
+        user_id: Number(admin.id),
+        identifier: String(admin.email)
+      };
+    }
+
+    const member = await db.get<{ id: number; phone: string }>(
+      'SELECT id, phone FROM members WHERE lower(email) = lower(?) LIMIT 1',
+      [sbUser.email]
+    );
+    if (!member) return null;
+    return {
+      token,
+      role: 'member',
+      user_id: Number(member.id),
+      identifier: String(member.phone)
+    };
+  }
+
   const nowIso = new Date().toISOString();
   const row = await db.get<{ token: string; role: string; user_id: number; identifier: string; expires_at: string }>(
     'SELECT token, role, user_id, identifier, expires_at FROM auth_sessions WHERE token = ? AND expires_at > ?',
@@ -322,6 +354,157 @@ async function verifyFirebaseGoogleIdToken(idToken: string): Promise<{ uid: stri
   };
 }
 
+interface VerifiedSupabaseUser {
+  id: string;
+  email: string;
+  name: string;
+  isMetadataAdmin: boolean;
+}
+
+const sbTokenCache = new Map<string, { user: VerifiedSupabaseUser; expiresAt: number }>();
+
+function getBootstrappedAdminEmails(): Set<string> {
+  return new Set([
+    'mal77ham@gmail.com',
+    'maleham06@gmail.com',
+    String(process.env.ADMIN_EMAIL || 'admin@shimogy.com').trim().toLowerCase()
+  ]);
+}
+
+async function ensureAdminRowForEmail(email: string, name = '', allowAutoCreate = false) {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail) return null;
+  let admin = await db.get<Record<string, any>>(
+    'SELECT * FROM admin_users WHERE lower(email) = lower(?)',
+    [cleanEmail]
+  );
+  if (!admin && (allowAutoCreate || getBootstrappedAdminEmails().has(cleanEmail))) {
+    const randomPass = crypto.randomBytes(24).toString('hex');
+    const info = await db.run(
+      'INSERT INTO admin_users (email, name, password_hash) VALUES (?, ?, ?)',
+      [cleanEmail, name || 'SHIMOGY Administrator', hashPassword(randomPass)]
+    );
+    admin = await db.get<Record<string, any>>('SELECT * FROM admin_users WHERE id = ?', [info.lastInsertRowid]);
+  }
+  return admin || null;
+}
+
+async function verifySupabaseAccessToken(accessToken: string): Promise<VerifiedSupabaseUser | null> {
+  const jwt = String(accessToken || '').trim();
+  if (!jwt || !SUPABASE_ANON_KEY) return null;
+  const cacheKey = crypto.createHash('sha256').update(jwt).digest('hex');
+  const cached = sbTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
+  }
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${jwt}`,
+        Accept: 'application/json'
+      }
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as {
+      id?: string;
+      email?: string;
+      user_metadata?: Record<string, any>;
+      app_metadata?: Record<string, any>;
+    };
+    const email = String(data?.email || '').trim().toLowerCase();
+    if (!email) return null;
+    const verified: VerifiedSupabaseUser = {
+      id: String(data?.id || ''),
+      email,
+      name: String(data?.user_metadata?.full_name || data?.user_metadata?.name || '').trim(),
+      isMetadataAdmin: String(data?.app_metadata?.role || '').toLowerCase() === 'admin'
+    };
+    sbTokenCache.set(cacheKey, { user: verified, expiresAt: Date.now() + 45_000 });
+    if (sbTokenCache.size > 1000) {
+      const oldest = sbTokenCache.keys().next().value;
+      if (oldest) sbTokenCache.delete(oldest);
+    }
+    return verified;
+  } catch {
+    return null;
+  }
+}
+
+async function verifySupabaseAuthPassword(email: string, password: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  user: VerifiedSupabaseUser;
+} | null> {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail || !password || !SUPABASE_ANON_KEY) return null;
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({ email: cleanEmail, password: String(password) })
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      user?: {
+        id?: string;
+        email?: string;
+        user_metadata?: Record<string, any>;
+        app_metadata?: Record<string, any>;
+      };
+    };
+    if (!data?.access_token || !data?.user?.email) return null;
+    const verified: VerifiedSupabaseUser = {
+      id: String(data.user.id || ''),
+      email: String(data.user.email).trim().toLowerCase(),
+      name: String(data.user.user_metadata?.full_name || data.user.user_metadata?.name || '').trim(),
+      isMetadataAdmin: String(data.user.app_metadata?.role || '').toLowerCase() === 'admin'
+    };
+    const cacheKey = crypto.createHash('sha256').update(data.access_token).digest('hex');
+    sbTokenCache.set(cacheKey, { user: verified, expiresAt: Date.now() + 45_000 });
+    return {
+      access_token: data.access_token,
+      refresh_token: String(data.refresh_token || ''),
+      user: verified
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function updateSupabaseAuthUser(accessToken: string, updates: { email?: string; password?: string }) {
+  if (!accessToken || !SUPABASE_ANON_KEY) return { ok: false, error: 'Missing Supabase session.' };
+  try {
+    const payload: Record<string, string> = {};
+    if (updates.email) payload.email = updates.email;
+    if (updates.password) payload.password = updates.password;
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = (await resp.json().catch(() => ({}))) as Record<string, any>;
+    if (!resp.ok) {
+      return { ok: false, error: String(data.msg || data.error_description || data.error || 'Supabase Auth update failed.') };
+    }
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: 'Unable to reach Supabase Auth.' };
+  }
+}
+
 // ============================================================
 // PUBLIC API ROUTES
 // ============================================================
@@ -425,24 +608,53 @@ app.post(
   '/api/member/login',
   loginLimiter,
   asyncHandler(async (req, res) => {
-    const { phone, password } = req.body || {};
-    if (!phone || !password) {
-      res.status(400).json({ error: 'Phone number and password are required.' });
-      return;
-    }
-    const normalized = normalizePhone(phone);
-    const member = await db.get<Record<string, any>>(
-      'SELECT * FROM members WHERE phone = ? OR phone = ?',
-      [normalized, String(phone).trim()]
-    );
-
-    if (!member || !verifyPassword(String(password), member.password_hash)) {
-      res.status(401).json({ error: 'Invalid phone number or password.' });
+    const { phone, email, identifier, password } = req.body || {};
+    const rawId = String(email || phone || identifier || '').trim();
+    if (!rawId || !password) {
+      res.status(400).json({ error: 'Phone number (or email) and password are required.' });
       return;
     }
 
-    const token = await createSession('member', Number(member.id), member.phone);
-    res.json({ token, member: sanitizeMember(member) });
+    const isEmailInput = rawId.includes('@');
+    let member = isEmailInput
+      ? await db.get<Record<string, any>>('SELECT * FROM members WHERE lower(email) = lower(?) LIMIT 1', [rawId])
+      : await db.get<Record<string, any>>('SELECT * FROM members WHERE phone = ? OR phone = ? LIMIT 1', [
+          normalizePhone(rawId),
+          rawId
+        ]);
+
+    if (member && verifyPassword(String(password), member.password_hash)) {
+      const token = await createSession('member', Number(member.id), member.phone);
+      res.json({ token, member: sanitizeMember(member) });
+      return;
+    }
+
+    const sbEmail = isEmailInput ? rawId.toLowerCase() : String(member?.email || '').trim().toLowerCase();
+    if (sbEmail) {
+      const sbAuth = await verifySupabaseAuthPassword(sbEmail, String(password));
+      if (sbAuth) {
+        if (!member) {
+          member = await db.get<Record<string, any>>('SELECT * FROM members WHERE lower(email) = lower(?) LIMIT 1', [
+            sbAuth.user.email
+          ]);
+        }
+        if (!member) {
+          res.status(404).json({
+            error: `Signed into Supabase Auth (${sbAuth.user.email}), but no client ledger profile is linked to this email yet. Ask Operations to add ${sbAuth.user.email} to your profile in Clients Directory.`
+          });
+          return;
+        }
+        res.json({
+          token: `sb_mem_${sbAuth.access_token}`,
+          refresh_token: sbAuth.refresh_token,
+          supabaseAuth: true,
+          member: sanitizeMember(member)
+        });
+        return;
+      }
+    }
+
+    res.status(401).json({ error: 'Invalid phone/email or password.' });
   })
 );
 
@@ -510,7 +722,32 @@ app.post(
       return;
     }
     const member = await db.get<Record<string, any>>('SELECT * FROM members WHERE id = ?', [session.user_id]);
-    if (!member || !verifyPassword(String(currentPassword), member.password_hash)) {
+    if (!member) {
+      res.status(404).json({ error: 'Client account not found.' });
+      return;
+    }
+
+    if (session.token.startsWith('sb_mem_')) {
+      if (String(newPassword).length < 6) {
+        res.status(400).json({ error: 'Supabase Auth passwords must be at least 6 characters.' });
+        return;
+      }
+      const verifiedCur = await verifySupabaseAuthPassword(String(member.email || ''), String(currentPassword));
+      if (!verifiedCur) {
+        res.status(400).json({ error: 'Current password is incorrect.' });
+        return;
+      }
+      const upd = await updateSupabaseAuthUser(session.token.slice(7), { password: String(newPassword) });
+      if (!upd.ok) {
+        res.status(400).json({ error: upd.error || 'Could not update Supabase Auth password.' });
+        return;
+      }
+      await db.run('UPDATE members SET password_hash = ? WHERE id = ?', [hashPassword(String(newPassword)), member.id]);
+      res.json({ success: true });
+      return;
+    }
+
+    if (!verifyPassword(String(currentPassword), member.password_hash)) {
       res.status(400).json({ error: 'Current password is incorrect.' });
       return;
     }
@@ -681,7 +918,13 @@ app.post(
   asyncHandler(async (req, res) => {
     const session = await getSessionFromHeader(req);
     if (session) {
-      await db.run('DELETE FROM auth_sessions WHERE token = ?', [session.token]);
+      if (session.token.startsWith('sb_adm_') || session.token.startsWith('sb_mem_')) {
+        const jwt = session.token.slice(7).trim();
+        const cacheKey = crypto.createHash('sha256').update(jwt).digest('hex');
+        sbTokenCache.delete(cacheKey);
+      } else {
+        await db.run('DELETE FROM auth_sessions WHERE token = ?', [session.token]);
+      }
     }
     res.json({ success: true });
   })
@@ -700,18 +943,42 @@ app.post(
       res.status(400).json({ error: 'Email and password are required.' });
       return;
     }
+    const cleanEmail = String(email).trim().toLowerCase();
     const admin = await db.get<Record<string, any>>(
       'SELECT * FROM admin_users WHERE lower(email) = lower(?)',
-      [String(email).trim()]
+      [cleanEmail]
     );
 
-    if (!admin || !verifyPassword(String(password), admin.password_hash)) {
-      res.status(401).json({ error: 'Invalid admin email or password.' });
+    if (admin && verifyPassword(String(password), admin.password_hash)) {
+      const token = await createSession('admin', Number(admin.id), admin.email);
+      res.json({ token, admin: { id: admin.id, email: admin.email, name: admin.name } });
       return;
     }
 
-    const token = await createSession('admin', Number(admin.id), admin.email);
-    res.json({ token, admin: { id: admin.id, email: admin.email, name: admin.name } });
+    // Fallback / Primary verification against Supabase Auth Users
+    const sbAuth = await verifySupabaseAuthPassword(cleanEmail, String(password));
+    if (sbAuth) {
+      const authorizedAdmin = await ensureAdminRowForEmail(
+        sbAuth.user.email,
+        sbAuth.user.name,
+        sbAuth.user.isMetadataAdmin
+      );
+      if (!authorizedAdmin) {
+        res.status(403).json({
+          error: `This Supabase Auth account (${sbAuth.user.email}) is not authorized as a SHIMOGY administrator.`
+        });
+        return;
+      }
+      res.json({
+        token: `sb_adm_${sbAuth.access_token}`,
+        refresh_token: sbAuth.refresh_token,
+        supabaseAuth: true,
+        admin: { id: authorizedAdmin.id, email: authorizedAdmin.email, name: authorizedAdmin.name }
+      });
+      return;
+    }
+
+    res.status(401).json({ error: 'Invalid admin email or password.' });
   })
 );
 
@@ -766,6 +1033,56 @@ app.get(
   })
 );
 
+app.get(
+  '/api/admin/admins',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const admins = await db.all('SELECT id, email, name, created_at FROM admin_users ORDER BY id ASC');
+    res.json({ admins });
+  })
+);
+
+app.post(
+  '/api/admin/admins',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const cleanEmail = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const cleanName = String((req.body && req.body.name) || 'SHIMOGY Administrator').trim().slice(0, 120);
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      res.status(400).json({ error: 'Please enter a valid administrator email address.' });
+      return;
+    }
+    const existing = await db.get<{ id: number }>('SELECT id FROM admin_users WHERE lower(email) = lower(?)', [
+      cleanEmail
+    ]);
+    if (existing) {
+      res.status(409).json({ error: 'This email is already authorized as a SHIMOGY administrator.' });
+      return;
+    }
+    const randomPass = crypto.randomBytes(24).toString('hex');
+    const info = await db.run('INSERT INTO admin_users (email, name, password_hash) VALUES (?, ?, ?)', [
+      cleanEmail,
+      cleanName || 'SHIMOGY Administrator',
+      hashPassword(randomPass)
+    ]);
+    res.status(201).json({ id: info.lastInsertRowid, email: cleanEmail, name: cleanName });
+  })
+);
+
+app.delete(
+  '/api/admin/admins/:id',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (id === Number(req.authSession!.user_id)) {
+      res.status(400).json({ error: 'You cannot remove the currently signed-in administrator account.' });
+      return;
+    }
+    await db.run('DELETE FROM admin_users WHERE id = ?', [id]);
+    res.json({ success: true });
+  })
+);
+
 app.post(
   '/api/admin/change-password',
   passwordLimiter,
@@ -813,10 +1130,23 @@ app.post(
       }
     }
 
+    if (req.authSession!.token.startsWith('sb_adm_')) {
+      const sbUpd = await updateSupabaseAuthUser(req.authSession!.token.slice(7), {
+        email: cleanEmail && cleanEmail !== finalEmail ? cleanEmail : undefined,
+        password: cleanPass || undefined
+      });
+      if (!sbUpd.ok) {
+        res.status(400).json({ error: sbUpd.error || 'Could not update Supabase Auth credentials.' });
+        return;
+      }
+    }
+
     await db.transaction(async (tx) => {
       if (cleanEmail && cleanEmail !== finalEmail) {
         await tx.run('UPDATE admin_users SET email = ? WHERE id = ?', [cleanEmail, adminId]);
-        await tx.run('UPDATE auth_sessions SET identifier = ? WHERE token = ?', [cleanEmail, req.authSession!.token]);
+        if (!req.authSession!.token.startsWith('sb_adm_')) {
+          await tx.run('UPDATE auth_sessions SET identifier = ? WHERE token = ?', [cleanEmail, req.authSession!.token]);
+        }
         finalEmail = cleanEmail;
       }
 

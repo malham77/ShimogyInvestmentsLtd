@@ -1239,6 +1239,7 @@
             secNoteEl.textContent = 'Currently signed in as: ' + (state.currentAdminEmail || 'Administrator');
           }
         }
+        return loadAuthorizedAdmins();
       })
       .catch(function (err) {
         if (!err || err.status === 401 || !isInteractiveLogin) {
@@ -1819,6 +1820,58 @@
       showToast('Administrator credentials updated.', false);
     }).catch(function (err) { showToast(err.message, true); });
   });
+
+  function loadAuthorizedAdmins() {
+    var tbody = document.getElementById('authorizedAdminsBody');
+    if (!tbody) return Promise.resolve();
+    return apiFetch('/api/admin/admins')
+      .then(function (res) {
+        var rows = (res && res.admins) || [];
+        tbody.innerHTML = rows.map(function (a) {
+          var isSelf = String(a.email || '').toLowerCase() === String(state.currentAdminEmail || '').toLowerCase();
+          return (
+            '<tr>' +
+              '<td><strong>' + site.escapeHtml(a.email || '') + '</strong>' + (isSelf ? ' <span class="status-badge status-active">Current</span>' : '') + '</td>' +
+              '<td>' + site.escapeHtml(a.name || 'SHIMOGY Administrator') + '</td>' +
+              '<td>' + site.escapeHtml(String(a.created_at || '').slice(0, 10) || '--') + '</td>' +
+              '<td>' + (isSelf ? '<span style="font-size:0.8rem;color:var(--text-muted);">Active Session</span>' : '<button type="button" class="btn btn-danger btn-sm del-auth-admin-btn" data-id="' + site.escapeHtml(a.id) + '">Remove</button>') + '</td>' +
+            '</tr>'
+          );
+        }).join('') || '<tr><td colspan="4">No authorized administrator accounts found.</td></tr>';
+
+        tbody.querySelectorAll('.del-auth-admin-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!btn.dataset.confirmed) { btn.dataset.confirmed = '1'; btn.textContent = 'Confirm?'; return; }
+            apiFetch('/api/admin/admins/' + encodeURIComponent(btn.getAttribute('data-id')), { method: 'DELETE' })
+              .then(function () { showToast('Administrator email removed.', false); loadAuthorizedAdmins(); })
+              .catch(function (err) { showToast(err.message, true); });
+          });
+        });
+      })
+      .catch(function () {});
+  }
+
+  var authAdminsForm = document.getElementById('adminAuthorizedEmailsForm');
+  if (authAdminsForm) {
+    authAdminsForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var emailEl = document.getElementById('authAdminEmailInput');
+      var nameEl = document.getElementById('authAdminNameInput');
+      var emailVal = emailEl ? emailEl.value.trim().toLowerCase() : '';
+      var nameVal = nameEl ? nameEl.value.trim() : '';
+      if (!emailVal) return;
+      apiFetch('/api/admin/admins', {
+        method: 'POST',
+        body: JSON.stringify({ email: emailVal, name: nameVal || 'SHIMOGY Administrator' })
+      })
+        .then(function () {
+          authAdminsForm.reset();
+          showToast('Authorized ' + emailVal + ' for Supabase Auth Admin sign-in.', false);
+          loadAuthorizedAdmins();
+        })
+        .catch(function (err) { showToast(err.message, true); });
+    });
+  }
 
   var verifyLiveSyncBtn = document.getElementById('verifyLiveSyncBtn');
   if (verifyLiveSyncBtn) {

@@ -481,7 +481,7 @@ CREATE TABLE IF NOT EXISTS client_notifications (
 `;
 
 export const PG_RLS_SQL = `
--- Security Hardening: Enable Row Level Security (RLS) on all tables
+-- Security Hardening & Live Supabase Auth Access: Enable Row Level Security (RLS) on all tables
 ALTER TABLE site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_sessions ENABLE ROW LEVEL SECURITY;
@@ -501,7 +501,105 @@ ALTER TABLE media_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cycle_exit_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE client_notifications ENABLE ROW LEVEL SECURITY;
 
--- Public Catalog Read-Only Policies (for static Cloudflare Pages / REST reads)
+-- Role Privileges (enforced strictly by RLS below)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON site_settings, hero_slides, testimonials, investment_plans, public_cycles, updates TO anon;
+GRANT INSERT ON service_requests, deletion_requests TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+  site_settings, admin_users, hero_slides, testimonials, investment_plans, public_cycles,
+  updates, members, investments, savings, loans, member_cycles, service_requests,
+  deletion_requests, media_files, cycle_exit_requests, client_notifications
+TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
+-- Security-Definer Role & Identity Helpers for Supabase Auth JWTs
+CREATE OR REPLACE FUNCTION public.is_shimogy_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+    OR EXISTS (
+      SELECT 1
+      FROM public.admin_users au
+      WHERE LOWER(au.email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.shimogy_member_id()
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT id
+  FROM public.members
+  WHERE LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+  ORDER BY id ASC
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.shimogy_member_phone()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT phone
+  FROM public.members
+  WHERE LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+  ORDER BY id ASC
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_my_cycle_co_members()
+RETURNS TABLE (cycle_name text, co_member_name text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH me AS (
+    SELECT id, phone
+    FROM public.members
+    WHERE LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+    ORDER BY id ASC
+    LIMIT 1
+  ),
+  my_cycles AS (
+    SELECT DISTINCT LOWER(TRIM(mc.cycle_name)) AS ckey
+    FROM public.member_cycles mc
+    CROSS JOIN me
+    WHERE mc.member_id = me.id OR mc.member_phone = me.phone
+  )
+  SELECT DISTINCT
+    mc.cycle_name::text,
+    COALESCE(NULLIF(m.name, ''), mc.member_name)::text AS co_member_name
+  FROM public.member_cycles mc
+  JOIN my_cycles myc ON LOWER(TRIM(mc.cycle_name)) = myc.ckey
+  LEFT JOIN public.members m ON m.id = mc.member_id
+  CROSS JOIN me
+  WHERE LOWER(COALESCE(mc.status, 'active')) NOT IN ('exited', 'stopped')
+    AND NOT (mc.member_id = me.id OR mc.member_phone = me.phone)
+    AND COALESCE(NULLIF(m.name, ''), mc.member_name) <> '';
+$$;
+
+REVOKE ALL ON FUNCTION public.is_shimogy_admin() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.shimogy_member_id() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.shimogy_member_phone() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_my_cycle_co_members() FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.is_shimogy_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.shimogy_member_id() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.shimogy_member_phone() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_my_cycle_co_members() TO authenticated;
+
+-- Public Catalog Read-Only Policies (for static hosts / REST reads)
 DROP POLICY IF EXISTS "Public read site_settings" ON site_settings;
 CREATE POLICY "Public read site_settings" ON site_settings FOR SELECT TO anon, authenticated USING (true);
 
@@ -526,6 +624,100 @@ CREATE POLICY "Public insert service_requests" ON service_requests FOR INSERT TO
 
 DROP POLICY IF EXISTS "Public insert deletion_requests" ON deletion_requests;
 CREATE POLICY "Public insert deletion_requests" ON deletion_requests FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+-- Authenticated Admin Full Access Policies (verified via public.is_shimogy_admin())
+DROP POLICY IF EXISTS "Admin full site_settings" ON site_settings;
+CREATE POLICY "Admin full site_settings" ON site_settings FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin read admin_users" ON admin_users;
+CREATE POLICY "Admin read admin_users" ON admin_users FOR SELECT TO authenticated USING (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin update own admin_users" ON admin_users;
+CREATE POLICY "Admin update own admin_users" ON admin_users FOR UPDATE TO authenticated USING (LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))) WITH CHECK (LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', '')));
+
+DROP POLICY IF EXISTS "Admin insert admin_users" ON admin_users;
+CREATE POLICY "Admin insert admin_users" ON admin_users FOR INSERT TO authenticated WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full hero_slides" ON hero_slides;
+CREATE POLICY "Admin full hero_slides" ON hero_slides FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full testimonials" ON testimonials;
+CREATE POLICY "Admin full testimonials" ON testimonials FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full investment_plans" ON investment_plans;
+CREATE POLICY "Admin full investment_plans" ON investment_plans FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full public_cycles" ON public_cycles;
+CREATE POLICY "Admin full public_cycles" ON public_cycles FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full updates" ON updates;
+CREATE POLICY "Admin full updates" ON updates FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full members" ON members;
+CREATE POLICY "Admin full members" ON members FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full investments" ON investments;
+CREATE POLICY "Admin full investments" ON investments FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full savings" ON savings;
+CREATE POLICY "Admin full savings" ON savings FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full loans" ON loans;
+CREATE POLICY "Admin full loans" ON loans FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full member_cycles" ON member_cycles;
+CREATE POLICY "Admin full member_cycles" ON member_cycles FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full service_requests" ON service_requests;
+CREATE POLICY "Admin full service_requests" ON service_requests FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full deletion_requests" ON deletion_requests;
+CREATE POLICY "Admin full deletion_requests" ON deletion_requests FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full media_files" ON media_files;
+CREATE POLICY "Admin full media_files" ON media_files FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full cycle_exit_requests" ON cycle_exit_requests;
+CREATE POLICY "Admin full cycle_exit_requests" ON cycle_exit_requests FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full client_notifications" ON client_notifications;
+CREATE POLICY "Admin full client_notifications" ON client_notifications FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+-- Authenticated Client Self-Service Policies (verified via email -> members record)
+DROP POLICY IF EXISTS "Client read own member" ON members;
+CREATE POLICY "Client read own member" ON members FOR SELECT TO authenticated USING (id = public.shimogy_member_id());
+
+DROP POLICY IF EXISTS "Client read own investments" ON investments;
+CREATE POLICY "Client read own investments" ON investments FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client read own savings" ON savings;
+CREATE POLICY "Client read own savings" ON savings FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client read own loans" ON loans;
+CREATE POLICY "Client read own loans" ON loans FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client read own cycles" ON member_cycles;
+CREATE POLICY "Client read own cycles" ON member_cycles FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client request own cycle exit" ON member_cycles;
+CREATE POLICY "Client request own cycle exit" ON member_cycles FOR UPDATE TO authenticated
+  USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone())
+  WITH CHECK ((member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone()) AND status IN ('exit_pending', 'stopped'));
+
+DROP POLICY IF EXISTS "Client read own exit requests" ON cycle_exit_requests;
+CREATE POLICY "Client read own exit requests" ON cycle_exit_requests FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client insert own exit requests" ON cycle_exit_requests;
+CREATE POLICY "Client insert own exit requests" ON cycle_exit_requests FOR INSERT TO authenticated
+  WITH CHECK ((member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone()) AND status = 'pending');
+
+DROP POLICY IF EXISTS "Client read own notifications" ON client_notifications;
+CREATE POLICY "Client read own notifications" ON client_notifications FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+
+DROP POLICY IF EXISTS "Client mark own notifications read" ON client_notifications;
+CREATE POLICY "Client mark own notifications read" ON client_notifications FOR UPDATE TO authenticated
+  USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone())
+  WITH CHECK (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
 `;
 
 export class DatabaseManager {

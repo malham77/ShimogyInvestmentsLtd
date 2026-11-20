@@ -449,15 +449,22 @@
 
   document.getElementById('memberLoginForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var phone = document.getElementById('memberPhoneInput').value.trim();
+    var identifier = document.getElementById('memberPhoneInput').value.trim();
     var password = document.getElementById('memberPasswordInput').value;
     var fb = document.getElementById('memberLoginFeedback');
     fb.innerHTML = '';
 
+    var payload = {
+      phone: identifier,
+      email: identifier.indexOf('@') !== -1 ? identifier.toLowerCase() : '',
+      identifier: identifier,
+      password: password
+    };
+
     site.apiFetch('/api/member/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: phone, password: password })
+      body: JSON.stringify(payload)
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {

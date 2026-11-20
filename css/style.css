@@ -2005,7 +2005,7 @@ html.dark .data-table th {
   font-weight: 500;
   color: #F8FAFC;
   will-change: transform;
-  animation: shimogyTickerRTL 28s linear infinite;
+  animation: shimogyTickerRTL 58s linear infinite;
 }
 
 .ticker-item strong {
