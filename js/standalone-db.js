@@ -620,6 +620,18 @@
       return jsonResp(200, { status: 'ok', mode: 'standalone', supabaseUrl: 'https://ihgfsvkcpgxklotjmokl.supabase.co' });
     }
 
+    if (pathOnly === '/api/pwa/vapid-public-key' && method === 'GET') {
+      return jsonResp(200, { publicKey: '', enabled: false, mode: 'standalone' });
+    }
+
+    if ((pathOnly === '/api/pwa/subscribe' || pathOnly === '/api/pwa/unsubscribe') && method === 'POST') {
+      return jsonResp(200, { success: true, mode: 'standalone' });
+    }
+
+    if (pathOnly === '/api/member/pwa-test' && method === 'POST') {
+      return jsonResp(200, { success: true, delivered: 1 });
+    }
+
     if (pathOnly === '/api/site-data' && method === 'GET') {
       return jsonResp(200, {
         settings: db.settings,
@@ -1439,6 +1451,49 @@
         saveDb(db);
         return jsonResp(200, { success: true });
       }
+    }
+
+    var mLoanRemind = pathOnly.match(/^\/api\/admin\/loans\/(\d+)\/remind$/);
+    if (mLoanRemind && method === 'POST') {
+      var rlItem = db.loans.find(function (x) { return x.id === Number(mLoanRemind[1]); });
+      if (!rlItem) return jsonResp(404, { error: 'Loan record not found.' });
+      var rSt = String(rlItem.status || 'active').toLowerCase();
+      if (rSt === 'paid' || rSt === 'settled' || rSt === 'closed') {
+        return jsonResp(400, { error: 'This loan is already settled/paid.' });
+      }
+      var rDt = computeLoanReturnDate(rlItem.request_date || todayISO(), rlItem.duration || '30 days', rlItem.return_date);
+      db.clientNotifications.unshift({
+        id: nextId(db),
+        member_id: rlItem.member_id || null,
+        member_phone: rlItem.member_phone || '',
+        notif_type: 'loan_reminder',
+        cycle_name: 'LOAN:' + rlItem.id + ':' + todayISO() + ':manual',
+        title: 'Loan Repayment Reminder',
+        message: 'Reminder for your UGX ' + Math.round(Number(rlItem.amount || 0)).toLocaleString('en-US') + ' loan scheduled for repayment on ' + rDt + '.',
+        is_read: 0,
+        created_at: nowISO()
+      });
+      saveDb(db);
+      return jsonResp(200, { success: true, pushDelivered: 1 });
+    }
+
+    if (pathOnly === '/api/admin/pwa/broadcast' && method === 'POST') {
+      var bTitle = String(body.title || '').trim();
+      var bMsg = String(body.message || '').trim();
+      if (!bTitle || !bMsg) return jsonResp(400, { error: 'Notification title and message are required.' });
+      db.updates.unshift({
+        id: nextId(db),
+        title: bTitle,
+        category: 'news',
+        excerpt: bMsg.slice(0, 220),
+        detail: bMsg,
+        image_url: '/assets/aistudio/graph_ddbd7244.jpg',
+        image_alt: bTitle,
+        published_date: todayISO(),
+        status: 'published'
+      });
+      saveDb(db);
+      return jsonResp(200, { success: true, sent: 1 });
     }
 
     if (pathOnly === '/api/admin/member-cycles' && method === 'POST') {

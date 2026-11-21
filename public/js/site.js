@@ -688,6 +688,9 @@
       this.fetchSiteData().then(function (data) {
         self.hydrateBusinessInfo(data);
         self.observeReveals(document);
+        if (window.ShimogyPWA && typeof window.ShimogyPWA.processSiteDataDiff === 'function') {
+          window.ShimogyPWA.processSiteDataDiff(data);
+        }
       });
     }
   };

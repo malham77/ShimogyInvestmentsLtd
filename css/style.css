@@ -2977,14 +2977,22 @@ html.dark .data-table th {
     height: 36px;
   }
 
+  .header-actions {
+    gap: 5px;
+  }
+
   .header-actions .wa-direct-link {
     display: none;
   }
 
   .header-actions .btn {
-    padding: 8px 10px;
-    font-size: 0.78rem;
-    min-height: 44px;
+    padding: 7px 9px;
+    font-size: 0.75rem;
+    min-height: 40px;
+  }
+
+  .pwa-install-btn {
+    padding: 7px 9px !important;
   }
 
   .btn {
@@ -3268,4 +3276,202 @@ html.dark .data-table th {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* ================================================================
+   PWA INSTALL BUTTON, LIVE TOAST ALERTS & OFFLINE INDICATOR
+   ================================================================ */
+.pwa-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: var(--blue-primary);
+  color: var(--blue-primary);
+}
+
+.pwa-install-btn:hover {
+  background-color: var(--blue-primary);
+  color: #FFFFFF;
+}
+
+html.dark .pwa-install-btn {
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+}
+
+html.dark .pwa-install-btn:hover {
+  background-color: var(--gold-accent);
+  border-color: var(--gold-accent);
+  color: #050E1E;
+}
+
+.pwa-alert-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border-left: 4px solid var(--blue-primary);
+}
+
+.pwa-alert-card-info {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.pwa-alert-card-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-bottom: 2px;
+}
+
+.pwa-alert-card-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.pwa-alert-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pwa-toast-stack {
+  position: fixed;
+  top: 86px;
+  right: 18px;
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 28px));
+  pointer-events: none;
+}
+
+.pwa-toast-card {
+  pointer-events: auto;
+  background-color: var(--surface-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--blue-primary);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-lg);
+  animation: pwaToastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pwaToastSlideIn {
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.pwa-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pwa-toast-head strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  color: var(--text-heading);
+  overflow-wrap: anywhere;
+}
+
+.pwa-toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--blue-primary);
+  flex-shrink: 0;
+}
+
+.pwa-toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pwa-toast-close:hover {
+  background-color: var(--bg-muted);
+  color: var(--text-heading);
+}
+
+.pwa-toast-body {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pwa-toast-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pwa-toast-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--blue-primary);
+  text-decoration: none;
+}
+
+.pwa-toast-link:hover {
+  text-decoration: underline;
+}
+
+.pwa-offline-banner {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 2200;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background-color: var(--navy-900);
+  color: #FFFFFF;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: var(--shadow-md);
+}
+
+.pwa-offline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #F59E0B;
+}
+
+@media (max-width: 640px) {
+  .pwa-toast-stack {
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .pwa-offline-banner {
+    bottom: 72px;
+    left: 12px;
+  }
+}
+
 

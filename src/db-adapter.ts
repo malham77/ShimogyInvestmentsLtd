@@ -511,6 +511,25 @@ CREATE TABLE IF NOT EXISTS client_password_changes (
   change_note TEXT NOT NULL DEFAULT '',
   changed_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
 );
+
+CREATE TABLE IF NOT EXISTS pwa_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'public',
+  member_id BIGINT,
+  member_phone TEXT NOT NULL DEFAULT '',
+  user_agent TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS'),
+  updated_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
+);
 `;
 
 export const PG_RLS_SQL = `
@@ -534,6 +553,8 @@ ALTER TABLE media_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cycle_exit_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE client_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE client_password_changes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pwa_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Role Privileges (enforced strictly by RLS below)
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
@@ -542,7 +563,8 @@ GRANT INSERT ON service_requests, deletion_requests TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   site_settings, admin_users, hero_slides, testimonials, investment_plans, public_cycles,
   updates, members, investments, savings, loans, member_cycles, service_requests,
-  deletion_requests, media_files, cycle_exit_requests, client_notifications, client_password_changes
+  deletion_requests, media_files, cycle_exit_requests, client_notifications, client_password_changes,
+  push_subscriptions
 TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 
@@ -719,6 +741,12 @@ CREATE POLICY "Admin full client_notifications" ON client_notifications FOR ALL 
 
 DROP POLICY IF EXISTS "Admin full client_password_changes" ON client_password_changes;
 CREATE POLICY "Admin full client_password_changes" ON client_password_changes FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full pwa_config" ON pwa_config;
+CREATE POLICY "Admin full pwa_config" ON pwa_config FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+DROP POLICY IF EXISTS "Admin full push_subscriptions" ON push_subscriptions;
+CREATE POLICY "Admin full push_subscriptions" ON push_subscriptions FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
 
 -- Authenticated Client Self-Service Policies (strictly scoped to logged-in client)
 DROP POLICY IF EXISTS "Client read own member" ON members;
@@ -1165,6 +1193,8 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS cycle_exit_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, member_cycle_id INTEGER NOT NULL, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, cycle_name TEXT NOT NULL, cycle_type TEXT NOT NULL DEFAULT 'public', action_type TEXT NOT NULL DEFAULT 'exit', reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), processed_at TEXT DEFAULT '');
       CREATE TABLE IF NOT EXISTS client_notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, notif_type TEXT NOT NULL DEFAULT 'cycle_exit', cycle_name TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS client_password_changes (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_name TEXT NOT NULL, member_phone TEXT NOT NULL, member_email TEXT NOT NULL DEFAULT '', changed_by TEXT NOT NULL DEFAULT 'Client', change_source TEXT NOT NULL DEFAULT 'client_portal', change_note TEXT NOT NULL DEFAULT '', changed_at TEXT DEFAULT (datetime('now')));
+      CREATE TABLE IF NOT EXISTS pwa_config (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TEXT DEFAULT (datetime('now')));
+      CREATE TABLE IF NOT EXISTS push_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, endpoint TEXT UNIQUE NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'public', member_id INTEGER, member_phone TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
     `);
 
     this.ensureSqliteColumn('members', 'pg_pass_hash', "TEXT NOT NULL DEFAULT ''");

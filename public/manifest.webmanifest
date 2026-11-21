@@ -1,0 +1,56 @@
+{
+  "id": "./",
+  "name": "SHIMOGY Investment Group Ltd",
+  "short_name": "SHIMOGY",
+  "description": "Smart business investments, Current & Fixed savings accounts, rotating community cycles, and client loans in Kampala, Uganda.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0A192F",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Client Portal",
+      "short_name": "Portal",
+      "description": "View your investments, savings balances, loan countdowns, and cycles",
+      "url": "./dashboard.html",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Company Updates",
+      "short_name": "Updates",
+      "description": "Read latest announcements and investment alerts",
+      "url": "./updates.html",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Investment Plans",
+      "short_name": "Plans",
+      "description": "Browse active business investment ventures",
+      "url": "./investments.html",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

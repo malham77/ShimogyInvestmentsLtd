@@ -9,6 +9,62 @@
   var pieChartInstance = null;
   var barChartInstance = null;
   var googleSignInRequested = false;
+  var portalPollTimer = null;
+
+  function syncClientAlertControls() {
+    var statusEl = document.getElementById('clientAlertStatusText');
+    var enableBtn = document.getElementById('enableClientPushBtn');
+    var testBtn = document.getElementById('testClientPushBtn');
+    if (!statusEl || !window.ShimogyPWA || typeof window.ShimogyPWA.getStatus !== 'function') return;
+    var st = window.ShimogyPWA.getStatus();
+    if (!st.notificationSupported) {
+      statusEl.textContent = 'In-app alerts are active while viewing the portal.';
+      if (enableBtn) enableBtn.style.display = 'none';
+      if (testBtn) testBtn.style.display = 'inline-flex';
+      return;
+    }
+    if (st.notificationPermission === 'granted') {
+      statusEl.textContent = 'Phone & device notifications are enabled for loan reminders, cycle updates & company news.';
+      if (enableBtn) {
+        enableBtn.textContent = 'Alerts Active';
+        enableBtn.classList.remove('btn-primary');
+        enableBtn.classList.add('btn-outline');
+      }
+      if (testBtn) testBtn.style.display = 'inline-flex';
+    } else if (st.notificationPermission === 'denied') {
+      statusEl.textContent = 'Browser notifications are blocked. Allow notifications in browser settings to get phone lock-screen alerts.';
+      if (enableBtn) {
+        enableBtn.textContent = 'Notifications Blocked';
+        enableBtn.classList.remove('btn-primary');
+        enableBtn.classList.add('btn-outline');
+      }
+      if (testBtn) testBtn.style.display = 'inline-flex';
+    } else {
+      statusEl.textContent = 'Tap Enable Phone Alerts to receive real-time loan repayment reminders & updates directly on your device.';
+      if (enableBtn) {
+        enableBtn.textContent = 'Enable Phone Alerts';
+        enableBtn.classList.add('btn-primary');
+        enableBtn.classList.remove('btn-outline');
+      }
+      if (testBtn) testBtn.style.display = 'inline-flex';
+    }
+  }
+
+  function startPortalPolling() {
+    if (portalPollTimer) return;
+    portalPollTimer = setInterval(function () {
+      if (document.visibilityState === 'visible' && getToken()) {
+        loadMemberProfile();
+      }
+    }, 25000);
+  }
+
+  function stopPortalPolling() {
+    if (portalPollTimer) {
+      clearInterval(portalPollTimer);
+      portalPollTimer = null;
+    }
+  }
 
   function getToken() {
     if (memoryToken) return memoryToken;
@@ -358,6 +414,16 @@
     }
 
     site.observeReveals(portalSec);
+    syncClientAlertControls();
+    startPortalPolling();
+    if (window.ShimogyPWA) {
+      if (typeof window.ShimogyPWA.processMemberSnapshot === 'function') {
+        window.ShimogyPWA.processMemberSnapshot(m);
+      }
+      if (typeof window.ShimogyPWA.syncPushSubscription === 'function') {
+        window.ShimogyPWA.syncPushSubscription();
+      }
+    }
   }
 
   function renderNotifications(notifications) {
@@ -416,6 +482,7 @@
   }
 
   function showLogin() {
+    stopPortalPolling();
     currentMember = null;
     setToken('');
     document.getElementById('memberLoginSection').style.display = 'block';
@@ -533,6 +600,7 @@
   }
 
   function handleSignOutToMainSite() {
+    stopPortalPolling();
     var token = getToken();
     setToken('');
     var finish = function () {
@@ -555,6 +623,58 @@
   }
 
   document.getElementById('refreshPortalBtn').addEventListener('click', loadMemberProfile);
+
+  var enableClientPushBtn = document.getElementById('enableClientPushBtn');
+  if (enableClientPushBtn) {
+    enableClientPushBtn.addEventListener('click', function () {
+      if (!window.ShimogyPWA || typeof window.ShimogyPWA.enableNotifications !== 'function') return;
+      enableClientPushBtn.disabled = true;
+      window.ShimogyPWA.enableNotifications()
+        .then(function () {
+          syncClientAlertControls();
+        })
+        .finally(function () {
+          enableClientPushBtn.disabled = false;
+        });
+    });
+  }
+
+  var testClientPushBtn = document.getElementById('testClientPushBtn');
+  if (testClientPushBtn) {
+    testClientPushBtn.addEventListener('click', function () {
+      var token = getToken();
+      testClientPushBtn.disabled = true;
+      var runLocalFallback = function () {
+        if (window.ShimogyPWA && typeof window.ShimogyPWA.notifyLive === 'function') {
+          window.ShimogyPWA.notifyLive(
+            'SHIMOGY Alert Test',
+            'Real-time notifications and loan repayment reminders are active on this device.',
+            './dashboard.html',
+            'test-' + Date.now(),
+            'View'
+          );
+        }
+      };
+      if (token && token.indexOf('cloud_') !== 0 && window.location.protocol !== 'file:') {
+        site.apiFetch('/api/member/pwa-test', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token }
+        })
+          .then(function (r) { return r.json().catch(function () { return {}; }); })
+          .then(function (d) {
+            if (!d || !d.sent) runLocalFallback();
+            else if (window.ShimogyPWA) window.ShimogyPWA.notifyLive('Push Sent to Registered Devices', 'Check your notification tray for the live push alert.', './dashboard.html', 'push-ok-' + Date.now(), 'OK');
+          })
+          .catch(runLocalFallback)
+          .finally(function () { testClientPushBtn.disabled = false; });
+      } else {
+        runLocalFallback();
+        testClientPushBtn.disabled = false;
+      }
+    });
+  }
+
+  window.addEventListener('shimogy:notif-permission', syncClientAlertControls);
 
   // Modals
   var passModal = document.getElementById('changePassModal');

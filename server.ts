@@ -4,6 +4,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import type WebPushType from 'web-push';
+
+const require = createRequire(import.meta.url);
+const webpush = require('web-push') as typeof WebPushType;
 import {
   DatabaseManager,
   SUPABASE_ANON_KEY,
@@ -549,7 +554,224 @@ async function updateSupabaseAuthUser(accessToken: string, updates: { email?: st
 }
 
 // ============================================================
-// PUBLIC API ROUTES
+// WEB PUSH (VAPID) & AUTOMATED LOAN REMINDER ENGINE
+// ============================================================
+
+let vapidReady = false;
+let vapidPublicKeyCache = '';
+
+async function ensureVapidConfig(): Promise<{ publicKey: string; privateKey: string } | null> {
+  try {
+    const pubRow = await db.get<{ value: string }>("SELECT value FROM pwa_config WHERE key = 'vapid_public_key'");
+    const privRow = await db.get<{ value: string }>("SELECT value FROM pwa_config WHERE key = 'vapid_private_key'");
+    let publicKey = String(pubRow?.value || process.env.VAPID_PUBLIC_KEY || '').trim();
+    let privateKey = String(privRow?.value || process.env.VAPID_PRIVATE_KEY || '').trim();
+
+    if (!publicKey || !privateKey) {
+      const keys = webpush.generateVAPIDKeys();
+      publicKey = keys.publicKey;
+      privateKey = keys.privateKey;
+      const now = nowTimestampISO();
+      await db.run(
+        "INSERT INTO pwa_config (key, value, updated_at) VALUES ('vapid_public_key', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        [publicKey, now]
+      );
+      await db.run(
+        "INSERT INTO pwa_config (key, value, updated_at) VALUES ('vapid_private_key', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        [privateKey, now]
+      );
+    }
+
+    webpush.setVapidDetails('mailto:shimogygroup@gmail.com', publicKey, privateKey);
+    vapidPublicKeyCache = publicKey;
+    vapidReady = true;
+    return { publicKey, privateKey };
+  } catch (err) {
+    console.error('VAPID initialization warning:', err);
+    return null;
+  }
+}
+
+interface PushNoticePayload {
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+  category?: string;
+}
+
+async function dispatchWebPushRows(
+  rows: Array<{ id?: number; endpoint: string; p256dh: string; auth: string }>,
+  notice: PushNoticePayload
+) {
+  if (!vapidReady) {
+    await ensureVapidConfig();
+  }
+  if (!vapidReady || !rows.length) return { sent: 0, failed: 0 };
+
+  const payloadStr = JSON.stringify({
+    title: String(notice.title || 'SHIMOGY Investment Group').slice(0, 120),
+    body: String(notice.body || '').slice(0, 320),
+    url: String(notice.url || './index.html'),
+    tag: String(notice.tag || 'shimogy-alert-' + Date.now()),
+    category: String(notice.category || 'general'),
+    icon: './pwa-192x192.png',
+    badge: './pwa-192x192.png',
+    timestamp: Date.now()
+  });
+
+  let sent = 0;
+  let failed = 0;
+  await Promise.allSettled(
+    rows.map(async (sub) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth }
+          },
+          payloadStr,
+          { TTL: 86400 }
+        );
+        sent += 1;
+      } catch (err: any) {
+        failed += 1;
+        const code = Number(err?.statusCode || 0);
+        if (code === 404 || code === 410) {
+          await db.run('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]).catch(() => {});
+        }
+      }
+    })
+  );
+  return { sent, failed };
+}
+
+async function sendPushToAll(notice: PushNoticePayload) {
+  try {
+    const subs = await db.all<{ id: number; endpoint: string; p256dh: string; auth: string }>(
+      'SELECT id, endpoint, p256dh, auth FROM push_subscriptions'
+    );
+    return await dispatchWebPushRows(subs, notice);
+  } catch {
+    return { sent: 0, failed: 0 };
+  }
+}
+
+async function sendPushToMember(memberId: number | null | undefined, memberPhone: string, notice: PushNoticePayload) {
+  try {
+    const norm = normalizePhone(memberPhone || '');
+    const subs = await db.all<{ id: number; endpoint: string; p256dh: string; auth: string }>(
+      `SELECT id, endpoint, p256dh, auth FROM push_subscriptions
+       WHERE (? IS NOT NULL AND member_id = ?)
+          OR (? <> '' AND (member_phone = ? OR member_phone = ?))`,
+      [memberId || null, memberId || -1, norm, memberPhone || '', norm]
+    );
+    return await dispatchWebPushRows(subs, notice);
+  } catch {
+    return { sent: 0, failed: 0 };
+  }
+}
+
+function buildLoanReminderText(loan: Record<string, any>): { shouldRemind: boolean; title: string; message: string; daysLeft: number } | null {
+  const status = String(loan.status || 'active').toLowerCase();
+  if (status === 'paid' || status === 'settled' || status === 'closed') return null;
+
+  const returnDate = computeLoanReturnDate(
+    String(loan.request_date || loan.created_at || todayISO()),
+    String(loan.duration || '30 days'),
+    String(loan.return_date || '')
+  );
+  const today = new Date(todayISO() + 'T00:00:00Z');
+  const target = new Date(returnDate + 'T00:00:00Z');
+  if (Number.isNaN(target.getTime())) return null;
+
+  const daysLeft = Math.round((target.getTime() - today.getTime()) / 86400000);
+  const amtFmt = `UGX ${Math.round(Number(loan.amount || 0)).toLocaleString('en-US')}`;
+
+  if (daysLeft < 0) {
+    const overdue = Math.abs(daysLeft);
+    return {
+      shouldRemind: true,
+      daysLeft,
+      title: 'Overdue Loan Repayment Alert',
+      message: `Your ${amtFmt} loan was due on ${returnDate} (${overdue} ${overdue === 1 ? 'day' : 'days'} overdue). Please arrange repayment or contact Kawempe Tula Operations.`
+    };
+  }
+  if (daysLeft === 0) {
+    return {
+      shouldRemind: true,
+      daysLeft,
+      title: 'Loan Repayment Due Today',
+      message: `Reminder: Your ${amtFmt} loan repayment is due today (${returnDate}). Please settle on time to keep a clean credit record.`
+    };
+  }
+  if (daysLeft === 1) {
+    return {
+      shouldRemind: true,
+      daysLeft,
+      title: 'Loan Repayment Due Tomorrow',
+      message: `Reminder: Your ${amtFmt} loan is due tomorrow (${returnDate}). Open your Client Portal to verify details.`
+    };
+  }
+  if (daysLeft <= 3) {
+    return {
+      shouldRemind: true,
+      daysLeft,
+      title: `Loan Due in ${daysLeft} Days`,
+      message: `Upcoming repayment reminder: ${amtFmt} loan is due on ${returnDate} (${daysLeft} days left).`
+    };
+  }
+  return {
+    shouldRemind: false,
+    daysLeft,
+    title: 'Loan Repayment Reminder',
+    message: `Reminder for your ${amtFmt} loan scheduled for repayment on ${returnDate} (${daysLeft} days remaining).`
+  };
+}
+
+async function sweepLoanReminders(targetMemberId?: number) {
+  try {
+    const today = todayISO();
+    const loans = targetMemberId
+      ? await db.all<Record<string, any>>(
+          "SELECT * FROM loans WHERE member_id = ? AND LOWER(COALESCE(status, 'active')) NOT IN ('paid', 'settled', 'closed')",
+          [targetMemberId]
+        )
+      : await db.all<Record<string, any>>(
+          "SELECT * FROM loans WHERE LOWER(COALESCE(status, 'active')) NOT IN ('paid', 'settled', 'closed')"
+        );
+
+    for (const loan of loans) {
+      const info = buildLoanReminderText(loan);
+      if (!info || !info.shouldRemind) continue;
+      const dedupeKey = `LOAN:${loan.id}:${today}`;
+      const existing = await db.get<{ id: number }>(
+        "SELECT id FROM client_notifications WHERE notif_type = 'loan_reminder' AND cycle_name = ? LIMIT 1",
+        [dedupeKey]
+      );
+      if (existing) continue;
+
+      await db.run(
+        `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+         VALUES (?, ?, 'loan_reminder', ?, ?, ?, 0)`,
+        [loan.member_id || null, String(loan.member_phone || ''), dedupeKey, info.title, info.message]
+      );
+
+      void sendPushToMember(loan.member_id, String(loan.member_phone || ''), {
+        title: info.title,
+        body: info.message,
+        url: './dashboard.html',
+        tag: dedupeKey,
+        category: 'loan_reminder'
+      });
+    }
+  } catch (err) {
+    console.error('Loan reminder sweep error:', err);
+  }
+}
+
+// ============================================================
+// PUBLIC & PWA API ROUTES
 // ============================================================
 
 app.get('/api/health', (_req, res) => {
@@ -558,9 +780,72 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     database: db.mode,
     supabaseUrl: SUPABASE_URL,
+    pwaPushReady: vapidReady,
     timestamp: new Date().toISOString()
   });
 });
+
+app.get(
+  '/api/pwa/vapid-public-key',
+  asyncHandler(async (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (!vapidReady || !vapidPublicKeyCache) {
+      await ensureVapidConfig();
+    }
+    res.json({ publicKey: vapidPublicKeyCache, enabled: Boolean(vapidPublicKeyCache) });
+  })
+);
+
+app.post(
+  '/api/pwa/subscribe',
+  asyncHandler(async (req, res) => {
+    const b = req.body || {};
+    const sub = b.subscription || b;
+    const endpoint = String(sub?.endpoint || '').trim();
+    const p256dh = String(sub?.keys?.p256dh || '').trim();
+    const auth = String(sub?.keys?.auth || '').trim();
+
+    if (!endpoint || !endpoint.startsWith('https://') || !p256dh || !auth) {
+      res.status(400).json({ error: 'Valid browser push subscription object is required.' });
+      return;
+    }
+
+    const session = await getSessionFromHeader(req).catch(() => null);
+    const isMember = session && session.role === 'member';
+    const scope = isMember ? 'member' : 'public';
+    const memberId = isMember ? Number(session!.user_id) : null;
+    const memberPhone = isMember ? String(session!.identifier || '') : '';
+    const ua = String(req.headers['user-agent'] || '').slice(0, 240);
+    const now = nowTimestampISO();
+
+    await db.run(
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, scope, member_id, member_phone, user_agent, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET
+         p256dh = excluded.p256dh,
+         auth = excluded.auth,
+         scope = CASE WHEN excluded.member_id IS NOT NULL THEN 'member' ELSE push_subscriptions.scope END,
+         member_id = COALESCE(excluded.member_id, push_subscriptions.member_id),
+         member_phone = CASE WHEN excluded.member_phone <> '' THEN excluded.member_phone ELSE push_subscriptions.member_phone END,
+         user_agent = excluded.user_agent,
+         updated_at = excluded.updated_at`,
+      [endpoint, p256dh, auth, scope, memberId, memberPhone, ua, now]
+    );
+
+    res.json({ success: true, scope, linkedToClient: Boolean(memberId) });
+  })
+);
+
+app.post(
+  '/api/pwa/unsubscribe',
+  asyncHandler(async (req, res) => {
+    const endpoint = String((req.body && req.body.endpoint) || '').trim();
+    if (endpoint) {
+      await db.run('DELETE FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
+    }
+    res.json({ success: true });
+  })
+);
 
 app.get(
   '/api/site-data',
@@ -753,12 +1038,33 @@ app.get(
       res.status(403).json({ error: 'Client session required.' });
       return;
     }
+    await sweepLoanReminders(Number(session.user_id));
     const profile = await getFullMemberProfile(Number(session.user_id));
     if (!profile) {
       res.status(404).json({ error: 'Client account not found.' });
       return;
     }
     res.json({ member: profile });
+  })
+);
+
+app.post(
+  '/api/member/pwa-test',
+  requireMemberOrAdmin,
+  asyncHandler(async (req, res) => {
+    const session = req.authSession!;
+    if (session.role !== 'member') {
+      res.status(403).json({ error: 'Client session required.' });
+      return;
+    }
+    const result = await sendPushToMember(Number(session.user_id), String(session.identifier || ''), {
+      title: 'SHIMOGY Real-Time Alerts Active',
+      body: 'Loan due countdowns, cycle alerts, and company updates will notify this device automatically.',
+      url: './dashboard.html',
+      tag: 'shimogy-test-' + session.user_id,
+      category: 'test'
+    });
+    res.json({ success: true, delivered: result.sent });
   })
 );
 
@@ -1363,6 +1669,15 @@ app.put(
         );
       }
     });
+    if (typeof updates.quick_updates_ticker === 'string' && updates.quick_updates_ticker.trim()) {
+      void sendPushToAll({
+        title: 'SHIMOGY Quick Update',
+        body: updates.quick_updates_ticker.trim().slice(0, 220),
+        url: './updates.html',
+        tag: 'shimogy-ticker-' + Date.now(),
+        category: 'update'
+      });
+    }
     res.json({ success: true });
   })
 );
@@ -1880,6 +2195,24 @@ app.post(
     if (m.memberId) {
       await db.run('UPDATE members SET total_invested = total_invested + ? WHERE id = ?', [amt, m.memberId]);
     }
+    void db.run(
+      `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+       VALUES (?, ?, 'account_update', ?, ?, ?, 0)`,
+      [
+        m.memberId,
+        m.memberPhone,
+        String(b.plan_name).trim(),
+        'New Investment Recorded',
+        `Your investment of UGX ${amt.toLocaleString('en-US')} in ${String(b.plan_name).trim()} has been added to your Client Portal.`
+      ]
+    ).catch(() => {});
+    void sendPushToMember(m.memberId, m.memberPhone, {
+      title: 'New Investment Recorded',
+      body: `UGX ${amt.toLocaleString('en-US')} in ${String(b.plan_name).trim()} is now active on your account.`,
+      url: './dashboard.html',
+      tag: 'inv-' + info.lastInsertRowid,
+      category: 'investment'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
   })
 );
@@ -1972,6 +2305,24 @@ app.post(
     if (m.memberId && bal > 0) {
       await db.run('UPDATE members SET balance = balance + ? WHERE id = ?', [bal, m.memberId]);
     }
+    void db.run(
+      `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+       VALUES (?, ?, 'account_update', ?, ?, ?, 0)`,
+      [
+        m.memberId,
+        m.memberPhone,
+        acctType,
+        'Savings Deposit Credited',
+        `${acctType} balance updated by UGX ${bal.toLocaleString('en-US')} (${status}).`
+      ]
+    ).catch(() => {});
+    void sendPushToMember(m.memberId, m.memberPhone, {
+      title: 'Savings Deposit Credited',
+      body: `${acctType} updated with UGX ${bal.toLocaleString('en-US')} (${status}).`,
+      url: './dashboard.html',
+      tag: 'sav-' + info.lastInsertRowid,
+      category: 'savings'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
   })
 );
@@ -2048,7 +2399,57 @@ app.post(
         returnDate
       ]
     );
+    void db.run(
+      `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+       VALUES (?, ?, 'loan_notice', ?, ?, ?, 0)`,
+      [
+        m.memberId,
+        m.memberPhone,
+        `LOAN_NEW:${info.lastInsertRowid}`,
+        'Client Loan Recorded',
+        `Loan of UGX ${amt.toLocaleString('en-US')} recorded. Repayment date: ${returnDate}.`
+      ]
+    ).catch(() => {});
+    void sendPushToMember(m.memberId, m.memberPhone, {
+      title: 'Client Loan Recorded',
+      body: `UGX ${amt.toLocaleString('en-US')} loan recorded. Returning date: ${returnDate}.`,
+      url: './dashboard.html',
+      tag: 'loan-' + info.lastInsertRowid,
+      category: 'loan_reminder'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
+  })
+);
+
+app.post(
+  '/api/admin/loans/:id/remind',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const loan = await db.get<Record<string, any>>('SELECT * FROM loans WHERE id = ?', [id]);
+    if (!loan) {
+      res.status(404).json({ error: 'Loan record not found.' });
+      return;
+    }
+    const info = buildLoanReminderText(loan);
+    if (!info) {
+      res.status(400).json({ error: 'This loan is already settled/paid.' });
+      return;
+    }
+    const key = `LOAN:${loan.id}:${todayISO()}:manual`;
+    await db.run(
+      `INSERT INTO client_notifications (member_id, member_phone, notif_type, cycle_name, title, message, is_read)
+       VALUES (?, ?, 'loan_reminder', ?, ?, ?, 0)`,
+      [loan.member_id || null, String(loan.member_phone || ''), key, info.title, info.message]
+    );
+    const pushRes = await sendPushToMember(loan.member_id, String(loan.member_phone || ''), {
+      title: info.title,
+      body: info.message,
+      url: './dashboard.html',
+      tag: 'loan-remind-' + loan.id + '-' + Date.now(),
+      category: 'loan_reminder'
+    });
+    res.json({ success: true, pushDelivered: pushRes.sent });
   })
 );
 
@@ -2137,6 +2538,13 @@ app.post(
         String(b.status || 'active')
       ]
     );
+    void sendPushToMember(m.memberId, m.memberPhone, {
+      title: 'Added to Savings Cycle',
+      body: `You were added to ${String(b.cycle_name).trim()} (Cycle Turn #${cycleNum}).`,
+      url: './dashboard.html',
+      tag: 'cyc-' + info.lastInsertRowid,
+      category: 'cycle'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
   })
 );
@@ -2307,6 +2715,13 @@ app.post(
         String(b.badge || '').trim()
       ]
     );
+    void sendPushToAll({
+      title: 'New Investment Plan Available',
+      body: `${String(b.name).trim()} · Capital UGX ${price.toLocaleString('en-US')} -> Est. Return UGX ${expRet.toLocaleString('en-US')}`,
+      url: './investments.html',
+      tag: 'plan-' + info.lastInsertRowid,
+      category: 'plan'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
   })
 );
@@ -2391,6 +2806,13 @@ app.post(
         String(b.image_alt || `${b.name} savings cycle`).trim()
       ]
     );
+    void sendPushToAll({
+      title: 'New Savings Cycle Open',
+      body: `${String(b.name).trim()} · Contribution UGX ${contribNum.toLocaleString('en-US')} (${String(b.payout_duration || 'Monthly').trim()})`,
+      url: './cycles.html',
+      tag: 'pub-cycle-' + info.lastInsertRowid,
+      category: 'cycle'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
   })
 );
@@ -2460,7 +2882,36 @@ app.post(
         String(b.published_date || todayISO())
       ]
     );
+    void sendPushToAll({
+      title: 'SHIMOGY Update: ' + String(b.title).trim(),
+      body: String(b.excerpt).trim(),
+      url: './updates.html',
+      tag: 'update-' + info.lastInsertRowid,
+      category: 'update'
+    });
     res.status(201).json({ id: info.lastInsertRowid });
+  })
+);
+
+app.post(
+  '/api/admin/pwa/broadcast',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const title = String((req.body && req.body.title) || '').trim();
+    const message = String((req.body && req.body.message) || '').trim();
+    const url = String((req.body && req.body.url) || './updates.html').trim() || './updates.html';
+    if (!title || !message) {
+      res.status(400).json({ error: 'Notification title and message are required.' });
+      return;
+    }
+    const pushRes = await sendPushToAll({
+      title,
+      body: message,
+      url,
+      tag: 'admin-broadcast-' + Date.now(),
+      category: 'broadcast'
+    });
+    res.json({ success: true, sent: pushRes.sent, failed: pushRes.failed });
   })
 );
 
@@ -2621,6 +3072,24 @@ app.post(
       }
     });
 
+    if (action === 'approve') {
+      void sendPushToMember(reqRow.member_id, String(reqRow.member_phone || ''), {
+        title: 'Cycle Exit Approved',
+        body: `Your request to exit ${reqRow.cycle_name} was approved by Admin.`,
+        url: './dashboard.html',
+        tag: 'exit-ok-' + id,
+        category: 'cycle'
+      });
+    } else {
+      void sendPushToMember(reqRow.member_id, String(reqRow.member_phone || ''), {
+        title: 'Cycle Exit Declined',
+        body: `Your request to exit ${reqRow.cycle_name} was declined. Your cycle remains active.`,
+        url: './dashboard.html',
+        tag: 'exit-no-' + id,
+        category: 'cycle'
+      });
+    }
+
     res.json({ success: true, status: action === 'approve' ? 'approved' : 'declined' });
   })
 );
@@ -2632,6 +3101,11 @@ app.post(
 async function startServer() {
   await db.initialize();
   await writeStaticSupabaseSchemaFile(db);
+  await ensureVapidConfig();
+  void sweepLoanReminders();
+  setInterval(() => {
+    void sweepLoanReminders();
+  }, 4 * 60 * 60 * 1000);
 
   app.use('/uploads', express.static(UPLOADS_DIR));
 

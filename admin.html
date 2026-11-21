@@ -8,6 +8,12 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="theme-color" content="#0A192F" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SHIMOGY" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <script>try{if(localStorage.getItem('shimogy_theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
   <link rel="icon" type="image/jpeg" href="assets/aistudio/logo2_be71428a.jpg" />
   <link rel="stylesheet" href="css/style.css" />
@@ -115,6 +121,10 @@
           </button>
           <button type="button" id="connectCloudBtn" class="btn btn-accent btn-sm">Sync Google Cloud</button>
           <a href="index.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">View Public Site</a>
+          <button type="button" id="pwaInstallNavBtn" class="btn btn-outline btn-sm pwa-install-btn" title="Install SHIMOGY App on this device">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span class="pwa-install-label">Install App</span>
+          </button>
           <button type="button" id="adminRefreshBtn" class="btn btn-outline btn-sm">Reload Data</button>
           <button type="button" id="adminLogoutBtn" class="btn btn-primary btn-sm">Sign Out</button>
         </div>
@@ -412,6 +422,28 @@
                 <textarea id="quickTickerInput" rows="2" placeholder="Enter today's announcement to scroll across the Quick Updates banner..." required></textarea>
               </div>
               <button type="submit" class="btn btn-primary">Save Quick Updates Banner Text</button>
+            </form>
+          </div>
+
+          <div class="panel-card">
+            <h2>Broadcast Push Notification to App Users</h2>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">Send an instant real-time alert directly to phones and browsers of SHIMOGY App subscribers.</p>
+            <form id="pwaBroadcastForm">
+              <div class="form-grid">
+                <div class="form-field"><label for="bcTitle">Notification Title</label><input type="text" id="bcTitle" required placeholder="e.g., New Weekly Investment Slot Open" /></div>
+                <div class="form-field">
+                  <label for="bcTargetUrl">Open Page on Tap</label>
+                  <select id="bcTargetUrl">
+                    <option value="./updates.html">Updates &amp; News</option>
+                    <option value="./investments.html">Investment Plans</option>
+                    <option value="./cycles.html">Savings Cycles</option>
+                    <option value="./dashboard.html">Client Portal</option>
+                    <option value="./loans.html">Loans</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-field"><label for="bcMessage">Notification Message</label><textarea id="bcMessage" rows="2" required placeholder="Short announcement for phones and desktop lock screens..."></textarea></div>
+              <button type="submit" class="btn btn-accent">Send Push Alert Now</button>
             </form>
           </div>
 
@@ -806,6 +838,7 @@
   <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
+  <script src="js/pwa.js"></script>
   <script src="js/chart.umd.min.js"></script>
   <script src="js/admin.js"></script>
 </body>

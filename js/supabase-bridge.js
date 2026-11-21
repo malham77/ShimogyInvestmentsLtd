@@ -611,6 +611,14 @@
       });
     }
 
+    if (pathOnly === '/api/pwa/vapid-public-key' && verb === 'GET') {
+      return Promise.resolve({ status: 200, data: { publicKey: '', enabled: false, mode: 'supabase-live' } });
+    }
+
+    if ((pathOnly === '/api/pwa/subscribe' || pathOnly === '/api/pwa/unsubscribe') && verb === 'POST') {
+      return Promise.resolve({ status: 200, data: { success: true, mode: 'supabase-live' } });
+    }
+
     if (pathOnly === '/api/logout' && verb === 'POST') {
       clearRefreshToken();
       if (tokenInfo.jwt) authRequest('logout', 'POST', undefined, tokenInfo.jwt).catch(function () {});
@@ -1627,6 +1635,31 @@
         }
       }
 
+      var mLoanRemind = pathOnly.match(/^\/api\/admin\/loans\/(\d+)\/remind$/);
+      if (mLoanRemind && verb === 'POST') {
+        return restGet('loans?id=eq.' + mLoanRemind[1] + '&limit=1', tokenInfo).then(function (rows) {
+          var ln = rows && rows[0];
+          if (!ln) return { status: 404, data: { error: 'Loan record not found.' } };
+          var st = String(ln.status || 'active').toLowerCase();
+          if (st === 'paid' || st === 'settled' || st === 'closed') {
+            return { status: 400, data: { error: 'This loan is already settled/paid.' } };
+          }
+          var retDt = computeLoanReturnDate(ln.request_date || todayISO(), ln.duration || '30 days', ln.return_date);
+          var amtFmt = 'UGX ' + Math.round(Number(ln.amount || 0)).toLocaleString('en-US');
+          return restPost('client_notifications', {
+            member_id: ln.member_id || null,
+            member_phone: String(ln.member_phone || ''),
+            notif_type: 'loan_reminder',
+            cycle_name: 'LOAN:' + ln.id + ':' + todayISO() + ':manual',
+            title: 'Loan Repayment Reminder',
+            message: 'Reminder for your ' + amtFmt + ' loan scheduled for repayment on ' + retDt + '.',
+            is_read: 0
+          }, tokenInfo, 'return=minimal').then(function (r) {
+            return r.ok ? { status: 200, data: { success: true, pushDelivered: 0 } } : { status: r.status, data: r.data };
+          });
+        });
+      }
+
       // Member Cycles CRUD
       if (pathOnly === '/api/admin/member-cycles' && verb === 'POST') {
         var cycIdent = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
@@ -1800,6 +1833,27 @@
           ]).then(function () { return { status: 200, data: { success: true, status: 'declined' } }; });
         });
       }
+      if (pathOnly === '/api/admin/pwa/broadcast' && verb === 'POST') {
+        var bTitle = String(b.title || '').trim();
+        var bMsg = String(b.message || '').trim();
+        if (!bTitle || !bMsg) return Promise.resolve({ status: 400, data: { error: 'Notification title and message are required.' } });
+        return restPost('updates', {
+          title: bTitle,
+          category: 'news',
+          excerpt: bMsg.slice(0, 220),
+          detail: bMsg,
+          image_url: '/assets/aistudio/graph_ddbd7244.jpg',
+          image_alt: bTitle,
+          published_date: todayISO(),
+          status: 'published'
+        }, tokenInfo).then(function () {
+          return { status: 200, data: { success: true, sent: 1, mode: 'supabase-update' } };
+        });
+      }
+    }
+
+    if (pathOnly === '/api/member/pwa-test' && verb === 'POST') {
+      return Promise.resolve({ status: 200, data: { success: true, delivered: 1 } });
     }
 
     return Promise.resolve(null);

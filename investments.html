@@ -8,6 +8,12 @@
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="theme-color" content="#0A192F" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SHIMOGY" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="canonical" href="investments.html" />
   <meta property="og:site_name" content="SHIMOGY Investment Group Ltd" />
   <meta property="og:title" content="Investment Plans | SHIMOGY Investment Group Uganda" />
@@ -150,6 +156,10 @@
         </button>
         <a href="https://wa.me/256752259416" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp btn-sm wa-direct-link">WhatsApp Us</a>
         <a href="dashboard.html" class="btn btn-primary btn-sm">Client Portal</a>
+        <button type="button" id="pwaInstallNavBtn" class="btn btn-outline btn-sm pwa-install-btn" title="Install SHIMOGY App on this device">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span class="pwa-install-label">Install App</span>
+        </button>
       </div>
     </div>
   </header>
@@ -374,6 +384,7 @@
   <script src="js/supabase-bridge.js"></script>
   <script src="js/standalone-db.js"></script>
   <script src="js/site.js"></script>
+  <script src="js/pwa.js"></script>
   <script>
     (function () {
       'use strict';

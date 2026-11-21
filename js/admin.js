@@ -1063,6 +1063,8 @@
     var tbody = document.getElementById('adminLoansTableBody');
     tbody.innerHTML = state.loans.map(function (l) {
       var cd = site.computeLoanCountdown(l);
+      var stLower = String(l.status || 'active').toLowerCase();
+      var isSettled = stLower === 'paid' || stLower === 'settled' || stLower === 'closed';
       return (
         '<tr>' +
           '<td>' + site.escapeHtml(l.member_name) + '</td>' +
@@ -1073,12 +1075,25 @@
           '<td><span class="countdown-text countdown-' + cd.tone + '">' + site.escapeHtml(cd.label) + '</span></td>' +
           '<td>' + site.escapeHtml(l.status) + '</td>' +
           '<td><div class="table-actions">' +
+            (isSettled ? '' : '<button type="button" class="btn btn-accent btn-sm remind-loan-btn" data-id="' + l.id + '">Send Remind</button>') +
             '<button type="button" class="btn btn-outline btn-sm mark-loan-paid-btn" data-id="' + l.id + '">Mark Paid</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-loan-btn" data-id="' + l.id + '">Delete</button>' +
           '</div></td>' +
         '</tr>'
       );
     }).join('') || '<tr><td colspan="8">No client loans recorded yet.</td></tr>';
+
+    tbody.querySelectorAll('.remind-loan-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        apiFetch('/api/admin/loans/' + btn.getAttribute('data-id') + '/remind', { method: 'POST' })
+          .then(function (res) {
+            showToast((res && res.message) || 'Loan reminder sent to client device & portal.', false);
+          })
+          .catch(function (e) { showToast(e.message, true); })
+          .finally(function () { btn.disabled = false; });
+      });
+    });
 
     tbody.querySelectorAll('.mark-loan-paid-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -1276,6 +1291,9 @@
         renderDeletionRequests();
         if (site && typeof site.observeReveals === 'function') {
           site.observeReveals(document.getElementById('adminMain'));
+        }
+        if (window.ShimogyPWA && typeof window.ShimogyPWA.emitLiveRefreshHint === 'function') {
+          window.ShimogyPWA.emitLiveRefreshHint('admin-sync');
         }
         return apiFetch('/api/admin/me');
       })
@@ -1631,11 +1649,35 @@
       .then(function () {
         document.getElementById('publicUpdateForm').reset();
         setPreviewImg('updImgPreview', '', 'assets/aistudio/graph_ddbd7244.jpg');
-        showToast('Company update published.', false);
+        showToast('Company update published & pushed to subscribed devices.', false);
         loadOverview();
       })
       .catch(function (err) { showToast(err.message, true); });
   });
+
+  var pwaBroadcastForm = document.getElementById('pwaBroadcastForm');
+  if (pwaBroadcastForm) {
+    pwaBroadcastForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var title = (document.getElementById('bcTitle').value || '').trim();
+      var message = (document.getElementById('bcMessage').value || '').trim();
+      var url = (document.getElementById('bcTargetUrl').value || './updates.html').trim();
+      if (!title || !message) return;
+      apiFetch('/api/admin/pwa/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ title: title, body: message, url: url })
+      })
+        .then(function (res) {
+          pwaBroadcastForm.reset();
+          var sentCount = res && typeof res.sent === 'number' ? res.sent : 0;
+          showToast('Push notification broadcast sent (' + sentCount + ' subscribed devices).', false);
+          if (window.ShimogyPWA && typeof window.ShimogyPWA.emitLiveRefreshHint === 'function') {
+            window.ShimogyPWA.emitLiveRefreshHint('broadcast');
+          }
+        })
+        .catch(function (err) { showToast(err.message, true); });
+    });
+  }
 
   document.getElementById('memberSearchBtn').addEventListener('click', function () {
     renderMembers(document.getElementById('memberSearchInput').value);
