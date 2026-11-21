@@ -11,8 +11,10 @@ import {
   computeLoanReturnDate,
   computeReturnsDate,
   hashPassword,
+  hashPgPassword,
   normalizePhone,
   normalizeSavingsStatus,
+  nowTimestampISO,
   sanitizeUrl,
   todayISO,
   verifyPassword,
@@ -224,27 +226,64 @@ async function createSession(role: string, userId: number, identifier: string): 
 }
 
 function sanitizeMember(member: Record<string, any>) {
-  const { password_hash: _ignored, ...rest } = member;
+  const { password_hash: _ignored, pg_pass_hash: _ignoredPg, ...rest } = member;
   return rest;
 }
 
-async function getFullMemberProfile(memberId: number) {
+async function getFullMemberProfile(memberId: number, includeAudit = false) {
   const member = await db.get<Record<string, any>>('SELECT * FROM members WHERE id = ?', [memberId]);
   if (!member) return null;
 
-  const phone = member.phone;
+  const phone = String(member.phone || '');
   const normSelfPhone = normalizePhone(phone);
-  const [investments, rawSavings, rawLoans, rawCycles, notifications] = await Promise.all([
-    db.all('SELECT * FROM investments WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
-    db.all('SELECT * FROM savings WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
-    db.all('SELECT * FROM loans WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
-    db.all('SELECT * FROM member_cycles WHERE member_id = ? OR member_phone = ? ORDER BY id DESC', [memberId, phone]),
-    db.all('SELECT * FROM client_notifications WHERE member_id = ? OR member_phone = ? ORDER BY id DESC LIMIT 30', [memberId, phone])
+  const matchPhone = normSelfPhone || phone;
+
+  const belongsToMember = (row: Record<string, any>) => {
+    if (row.member_id !== null && row.member_id !== undefined) {
+      return Number(row.member_id) === Number(memberId);
+    }
+    const rowNorm = normalizePhone(String(row.member_phone || ''));
+    return Boolean(normSelfPhone && rowNorm && rowNorm === normSelfPhone);
+  };
+
+  const [rawInvestments, rawSavings, rawLoans, rawCycles, rawNotifications, rawPasswordChanges] = await Promise.all([
+    db.all(
+      'SELECT * FROM investments WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC',
+      [memberId, matchPhone, phone, normSelfPhone]
+    ),
+    db.all(
+      'SELECT * FROM savings WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC',
+      [memberId, matchPhone, phone, normSelfPhone]
+    ),
+    db.all(
+      'SELECT * FROM loans WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC',
+      [memberId, matchPhone, phone, normSelfPhone]
+    ),
+    db.all(
+      'SELECT * FROM member_cycles WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC',
+      [memberId, matchPhone, phone, normSelfPhone]
+    ),
+    db.all(
+      'SELECT * FROM client_notifications WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC LIMIT 30',
+      [memberId, matchPhone, phone, normSelfPhone]
+    ),
+    includeAudit
+      ? db.all(
+          'SELECT id, member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at FROM client_password_changes WHERE member_id = ? OR (member_id IS NULL AND ? <> \'\' AND (member_phone = ? OR member_phone = ?)) ORDER BY id DESC LIMIT 25',
+          [memberId, matchPhone, phone, normSelfPhone]
+        )
+      : Promise.resolve([])
   ]);
+
+  const investments = rawInvestments.filter(belongsToMember);
+  const filteredSavings = rawSavings.filter(belongsToMember);
+  const filteredLoans = rawLoans.filter(belongsToMember);
+  const filteredCycles = rawCycles.filter(belongsToMember);
+  const notifications = rawNotifications.filter(belongsToMember);
 
   const cycleKeys = Array.from(
     new Set(
-      rawCycles
+      filteredCycles
         .map((c) => String(c.cycle_name || '').trim().toLowerCase())
         .filter(Boolean)
     )
@@ -278,7 +317,7 @@ async function getFullMemberProfile(memberId: number) {
     }
   }
 
-  const cycles = rawCycles.map((cy) => {
+  const cycles = filteredCycles.map((cy) => {
     const cKey = String(cy.cycle_name || '').trim().toLowerCase();
     const peerMap = peersByCycle.get(cKey);
     const coMembers = peerMap ? Array.from(peerMap.values()).sort((a, b) => a.localeCompare(b)) : [];
@@ -288,12 +327,12 @@ async function getFullMemberProfile(memberId: number) {
     };
   });
 
-  const savings = rawSavings.map((s) => ({
+  const savings = filteredSavings.map((s) => ({
     ...s,
     status: normalizeSavingsStatus(String(s.account_type || ''), String(s.status || ''))
   }));
 
-  const loans = rawLoans.map((l) => ({
+  const loans = filteredLoans.map((l) => ({
     ...l,
     return_date: l.return_date || computeLoanReturnDate(String(l.request_date || todayISO()), String(l.duration || '30 days'))
   }));
@@ -303,7 +342,7 @@ async function getFullMemberProfile(memberId: number) {
     returns_date: inv.returns_date || computeReturnsDate(String(inv.created_at || todayISO()), String(inv.duration || '60 Days'))
   }));
 
-  return {
+  const profile: Record<string, any> = {
     ...sanitizeMember(member),
     investments: normalizedInvestments,
     savings,
@@ -311,6 +350,10 @@ async function getFullMemberProfile(memberId: number) {
     cycles,
     notifications
   };
+  if (includeAudit) {
+    profile.password_changes = rawPasswordChanges;
+  }
+  return profile;
 }
 
 let cachedFirebaseApiKey = '';
@@ -610,45 +653,58 @@ app.post(
   asyncHandler(async (req, res) => {
     const { phone, email, identifier, password } = req.body || {};
     const rawId = String(email || phone || identifier || '').trim();
-    if (!rawId || !password) {
+    const rawPass = String(password || '');
+    if (!rawId || !rawPass) {
       res.status(400).json({ error: 'Phone number (or email) and password are required.' });
       return;
     }
 
     const isEmailInput = rawId.includes('@');
-    let member = isEmailInput
-      ? await db.get<Record<string, any>>('SELECT * FROM members WHERE lower(email) = lower(?) LIMIT 1', [rawId])
-      : await db.get<Record<string, any>>('SELECT * FROM members WHERE phone = ? OR phone = ? LIMIT 1', [
+    const candidates = isEmailInput
+      ? await db.all<Record<string, any>>('SELECT * FROM members WHERE lower(trim(email)) = lower(?) ORDER BY id ASC', [rawId])
+      : await db.all<Record<string, any>>('SELECT * FROM members WHERE phone = ? OR phone = ? ORDER BY id ASC', [
           normalizePhone(rawId),
           rawId
         ]);
 
-    if (member && verifyPassword(String(password), member.password_hash)) {
-      const token = await createSession('member', Number(member.id), member.phone);
-      res.json({ token, member: sanitizeMember(member) });
+    const matchedMember = candidates.find(
+      (m) => verifyPassword(rawPass, m.password_hash) || verifyPassword(rawPass, m.pg_pass_hash)
+    );
+
+    if (matchedMember) {
+      if (!matchedMember.pg_pass_hash) {
+        const pgHash = hashPgPassword(rawPass);
+        await db.run('UPDATE members SET pg_pass_hash = ? WHERE id = ?', [pgHash, matchedMember.id]);
+      }
+      const token = await createSession('member', Number(matchedMember.id), matchedMember.phone);
+      res.json({ token, member: sanitizeMember(matchedMember) });
       return;
     }
 
-    const sbEmail = isEmailInput ? rawId.toLowerCase() : String(member?.email || '').trim().toLowerCase();
+    const fallbackMember = candidates[0] || null;
+    const sbEmail = isEmailInput ? rawId.toLowerCase() : String(fallbackMember?.email || '').trim().toLowerCase();
     if (sbEmail) {
-      const sbAuth = await verifySupabaseAuthPassword(sbEmail, String(password));
+      const sbAuth = await verifySupabaseAuthPassword(sbEmail, rawPass);
       if (sbAuth) {
-        if (!member) {
-          member = await db.get<Record<string, any>>('SELECT * FROM members WHERE lower(email) = lower(?) LIMIT 1', [
+        const linkedMember =
+          fallbackMember ||
+          (await db.get<Record<string, any>>('SELECT * FROM members WHERE lower(trim(email)) = lower(?) ORDER BY id ASC LIMIT 1', [
             sbAuth.user.email
-          ]);
-        }
-        if (!member) {
+          ]));
+        if (!linkedMember) {
           res.status(404).json({
             error: `Signed into Supabase Auth (${sbAuth.user.email}), but no client ledger profile is linked to this email yet. Ask Operations to add ${sbAuth.user.email} to your profile in Clients Directory.`
           });
           return;
         }
+        if (!linkedMember.pg_pass_hash) {
+          await db.run('UPDATE members SET pg_pass_hash = ? WHERE id = ?', [hashPgPassword(rawPass), linkedMember.id]);
+        }
         res.json({
           token: `sb_mem_${sbAuth.access_token}`,
           refresh_token: sbAuth.refresh_token,
           supabaseAuth: true,
-          member: sanitizeMember(member)
+          member: sanitizeMember(linkedMember)
         });
         return;
       }
@@ -717,7 +773,9 @@ app.post(
       return;
     }
     const { currentPassword, newPassword } = req.body || {};
-    if (!currentPassword || !newPassword || String(newPassword).length < 4) {
+    const curPass = String(currentPassword || '');
+    const nextPass = String(newPassword || '');
+    if (!curPass || !nextPass || nextPass.length < 4) {
       res.status(400).json({ error: 'Current password and a new password (min 4 chars) are required.' });
       return;
     }
@@ -727,32 +785,55 @@ app.post(
       return;
     }
 
+    const changedAt = nowTimestampISO();
+
     if (session.token.startsWith('sb_mem_')) {
-      if (String(newPassword).length < 6) {
+      if (nextPass.length < 6) {
         res.status(400).json({ error: 'Supabase Auth passwords must be at least 6 characters.' });
         return;
       }
-      const verifiedCur = await verifySupabaseAuthPassword(String(member.email || ''), String(currentPassword));
-      if (!verifiedCur) {
+      const verifiedCur = await verifySupabaseAuthPassword(String(member.email || ''), curPass);
+      if (!verifiedCur && !verifyPassword(curPass, member.password_hash) && !verifyPassword(curPass, member.pg_pass_hash)) {
         res.status(400).json({ error: 'Current password is incorrect.' });
         return;
       }
-      const upd = await updateSupabaseAuthUser(session.token.slice(7), { password: String(newPassword) });
+      const upd = await updateSupabaseAuthUser(session.token.slice(7), { password: nextPass });
       if (!upd.ok) {
         res.status(400).json({ error: upd.error || 'Could not update Supabase Auth password.' });
         return;
       }
-      await db.run('UPDATE members SET password_hash = ? WHERE id = ?', [hashPassword(String(newPassword)), member.id]);
-      res.json({ success: true });
+      await db.transaction(async (tx) => {
+        await tx.run(
+          'UPDATE members SET password_hash = ?, pg_pass_hash = ?, password_updated_at = ?, password_changed_by = ? WHERE id = ?',
+          [hashPassword(nextPass), hashPgPassword(nextPass), changedAt, 'Client', member.id]
+        );
+        await tx.run(
+          `INSERT INTO client_password_changes (member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at)
+           VALUES (?, ?, ?, ?, 'Client', 'client_portal_supabase', 'Client updated their password via Client Dashboard.', ?)`,
+          [member.id, member.name, member.phone, member.email || '', changedAt]
+        );
+      });
+      res.json({ success: true, password_updated_at: changedAt });
       return;
     }
 
-    if (!verifyPassword(String(currentPassword), member.password_hash)) {
+    if (!verifyPassword(curPass, member.password_hash) && !verifyPassword(curPass, member.pg_pass_hash)) {
       res.status(400).json({ error: 'Current password is incorrect.' });
       return;
     }
-    await db.run('UPDATE members SET password_hash = ? WHERE id = ?', [hashPassword(String(newPassword)), member.id]);
-    res.json({ success: true });
+
+    await db.transaction(async (tx) => {
+      await tx.run(
+        'UPDATE members SET password_hash = ?, pg_pass_hash = ?, password_updated_at = ?, password_changed_by = ? WHERE id = ?',
+        [hashPassword(nextPass), hashPgPassword(nextPass), changedAt, 'Client', member.id]
+      );
+      await tx.run(
+        `INSERT INTO client_password_changes (member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at)
+         VALUES (?, ?, ?, ?, 'Client', 'client_portal', 'Client updated their password via Client Dashboard.', ?)`,
+        [member.id, member.name, member.phone, member.email || '', changedAt]
+      );
+    });
+    res.json({ success: true, password_updated_at: changedAt });
   })
 );
 
@@ -871,10 +952,10 @@ app.post(
       res.status(404).json({ error: 'Client account not found.' });
       return;
     }
-    await db.run('UPDATE client_notifications SET is_read = 1 WHERE member_id = ? OR member_phone = ?', [
-      member.id,
-      member.phone
-    ]);
+    await db.run(
+      "UPDATE client_notifications SET is_read = 1 WHERE member_id = ? OR (member_id IS NULL AND ? <> '' AND member_phone = ?)",
+      [member.id, member.phone || '', member.phone || '']
+    );
     res.json({ success: true });
   })
 );
@@ -902,8 +983,11 @@ app.post(
       res.status(404).json({ error: 'Notification not found.' });
       return;
     }
+    const normSelfPhone = normalizePhone(member.phone);
     const ownsNotif =
-      Number(notif.member_id) === Number(member.id) || normalizePhone(notif.member_phone) === normalizePhone(member.phone);
+      notif.member_id !== null && notif.member_id !== undefined
+        ? Number(notif.member_id) === Number(member.id)
+        : Boolean(normSelfPhone && normalizePhone(notif.member_phone) === normSelfPhone);
     if (!ownsNotif) {
       res.status(403).json({ error: 'You are not authorized to modify this notification.' });
       return;
@@ -1130,8 +1214,12 @@ app.post(
       }
     }
 
+    let emailUpdateNote = '';
+    let shouldRenameDbEmail = Boolean(cleanEmail && cleanEmail !== finalEmail);
+
     if (req.authSession!.token.startsWith('sb_adm_')) {
-      const sbUpd = await updateSupabaseAuthUser(req.authSession!.token.slice(7), {
+      const jwt = req.authSession!.token.slice(7);
+      const sbUpd = await updateSupabaseAuthUser(jwt, {
         email: cleanEmail && cleanEmail !== finalEmail ? cleanEmail : undefined,
         password: cleanPass || undefined
       });
@@ -1139,10 +1227,16 @@ app.post(
         res.status(400).json({ error: sbUpd.error || 'Could not update Supabase Auth credentials.' });
         return;
       }
+      sbTokenCache.delete(crypto.createHash('sha256').update(jwt).digest('hex'));
+      const returnedEmail = String(sbUpd.data?.email || '').trim().toLowerCase();
+      if (cleanEmail && cleanEmail !== finalEmail && returnedEmail !== cleanEmail) {
+        shouldRenameDbEmail = false;
+        emailUpdateNote = ` Verification link sent to ${cleanEmail}. Your current session remains ${finalEmail} until confirmed.`;
+      }
     }
 
     await db.transaction(async (tx) => {
-      if (cleanEmail && cleanEmail !== finalEmail) {
+      if (shouldRenameDbEmail && cleanEmail) {
         await tx.run('UPDATE admin_users SET email = ? WHERE id = ?', [cleanEmail, adminId]);
         if (!req.authSession!.token.startsWith('sb_adm_')) {
           await tx.run('UPDATE auth_sessions SET identifier = ? WHERE token = ?', [cleanEmail, req.authSession!.token]);
@@ -1158,7 +1252,7 @@ app.post(
       }
     });
 
-    res.json({ success: true, email: finalEmail });
+    res.json({ success: true, email: finalEmail, note: emailUpdateNote });
   })
 );
 
@@ -1195,7 +1289,8 @@ app.get(
       testimonials,
       requests,
       deletionRequests,
-      cycleExitRequests
+      cycleExitRequests,
+      passwordChanges
     ] = await Promise.all([
       db.all<{ key: string; value: string }>('SELECT key, value FROM site_settings'),
       db.all('SELECT * FROM members ORDER BY id DESC'),
@@ -1210,7 +1305,8 @@ app.get(
       db.all('SELECT * FROM testimonials ORDER BY sort_order ASC, id ASC'),
       db.all('SELECT * FROM service_requests ORDER BY id DESC'),
       db.all('SELECT * FROM deletion_requests ORDER BY id DESC'),
-      db.all('SELECT * FROM cycle_exit_requests ORDER BY id DESC')
+      db.all('SELECT * FROM cycle_exit_requests ORDER BY id DESC'),
+      db.all('SELECT id, member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at FROM client_password_changes ORDER BY id DESC LIMIT 100')
     ]);
 
     const settings: Record<string, string> = {};
@@ -1246,7 +1342,8 @@ app.get(
       testimonials,
       requests,
       deletionRequests,
-      cycleExitRequests
+      cycleExitRequests,
+      passwordChanges
     });
   })
 );
@@ -1463,16 +1560,20 @@ app.get(
   '/api/admin/member/:phone',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const normalized = normalizePhone(req.params.phone);
-    const member = await db.get<{ id: number }>('SELECT id FROM members WHERE phone = ? OR phone = ?', [
-      normalized,
-      req.params.phone
-    ]);
+    const rawParam = String(req.params.phone || '').trim();
+    const normalized = normalizePhone(rawParam);
+    const isEmail = rawParam.includes('@');
+    const member = isEmail
+      ? await db.get<{ id: number }>('SELECT id FROM members WHERE lower(trim(email)) = lower(?) LIMIT 1', [rawParam])
+      : await db.get<{ id: number }>('SELECT id FROM members WHERE phone = ? OR phone = ? LIMIT 1', [
+          normalized,
+          rawParam
+        ]);
     if (!member) {
       res.status(404).json({ error: 'Client not found.' });
       return;
     }
-    const profile = await getFullMemberProfile(Number(member.id));
+    const profile = await getFullMemberProfile(Number(member.id), true);
     res.json({ member: profile });
   })
 );
@@ -1484,6 +1585,7 @@ app.post(
     const b = req.body || {};
     const name = String(b.name || '').trim();
     const phone = normalizePhone(b.phone || '');
+    const email = String(b.email || '').trim().toLowerCase();
     const password = String(b.password || '').trim();
 
     if (!name || !phone || !password) {
@@ -1491,10 +1593,17 @@ app.post(
       return;
     }
 
-    const existing = await db.get('SELECT id FROM members WHERE phone = ?', [phone]);
-    if (existing) {
+    const existingPhone = await db.get('SELECT id FROM members WHERE phone = ?', [phone]);
+    if (existingPhone) {
       res.status(409).json({ error: 'A client with that phone number already exists.' });
       return;
+    }
+    if (email) {
+      const existingEmail = await db.get('SELECT id FROM members WHERE lower(trim(email)) = lower(?)', [email]);
+      if (existingEmail) {
+        res.status(409).json({ error: 'A client with that email address already exists.' });
+        return;
+      }
     }
 
     const balNum = toNonNegativeNumber(b.balance, 0);
@@ -1504,24 +1613,34 @@ app.post(
       return;
     }
 
+    const nowTs = nowTimestampISO();
+
     const memberId = await db.transaction(async (tx) => {
       const info = await tx.run(
-        `INSERT INTO members (name, phone, email, group_name, balance, total_invested, status, password_hash, age_verified, guardian_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO members (name, phone, email, group_name, balance, total_invested, status, password_hash, pg_pass_hash, password_updated_at, password_changed_by, age_verified, guardian_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Admin', ?, ?)`,
         [
           name,
           phone,
-          String(b.email || '').trim(),
+          email,
           String(b.group_name || '').trim(),
           balNum,
           invNum,
           String(b.status || 'active'),
           hashPassword(password),
+          hashPgPassword(password),
+          nowTs,
           b.age_verified === false ? 0 : 1,
           String(b.guardian_name || '').trim()
         ]
       );
       const mid = info.lastInsertRowid;
+
+      await tx.run(
+        `INSERT INTO client_password_changes (member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at)
+         VALUES (?, ?, ?, ?, 'Admin', 'admin_console', 'Initial portal password set by Admin.', ?)`,
+        [mid, name, phone, email, nowTs]
+      );
 
       if (b.investment && b.investment.plan_name && Number(b.investment.amount) > 0) {
         const dur = String(b.investment.duration || '60 Days').trim();
@@ -1626,6 +1745,17 @@ app.put(
         return;
       }
     }
+    const newEmail = String(b.email !== undefined ? b.email : existing.email || '').trim().toLowerCase();
+    if (newEmail) {
+      const emailConflict = await db.get('SELECT id FROM members WHERE lower(trim(email)) = lower(?) AND id <> ?', [
+        newEmail,
+        id
+      ]);
+      if (emailConflict) {
+        res.status(409).json({ error: 'Another client account already uses that email address.' });
+        return;
+      }
+    }
     const newName = String(b.name || existing.name).trim();
     const balNum = toNonNegativeNumber(b.balance ?? existing.balance, Number(existing.balance || 0));
     const invNum = toNonNegativeNumber(b.total_invested ?? existing.total_invested, Number(existing.total_invested || 0));
@@ -1634,6 +1764,9 @@ app.put(
       return;
     }
 
+    const resetPass = String(b.password || '').trim();
+    const nowTs = nowTimestampISO();
+
     await db.transaction(async (tx) => {
       await tx.run(
         `UPDATE members SET name=?, phone=?, email=?, group_name=?, balance=?, total_invested=?, status=?
@@ -1641,7 +1774,7 @@ app.put(
         [
           newName,
           newPhone,
-          String(b.email ?? existing.email).trim(),
+          newEmail,
           String(b.group_name ?? existing.group_name).trim(),
           balNum,
           invNum,
@@ -1650,8 +1783,16 @@ app.put(
         ]
       );
 
-      if (b.password && String(b.password).trim().length > 0) {
-        await tx.run('UPDATE members SET password_hash = ? WHERE id = ?', [hashPassword(String(b.password).trim()), id]);
+      if (resetPass.length > 0) {
+        await tx.run(
+          'UPDATE members SET password_hash = ?, pg_pass_hash = ?, password_updated_at = ?, password_changed_by = ? WHERE id = ?',
+          [hashPassword(resetPass), hashPgPassword(resetPass), nowTs, 'Admin', id]
+        );
+        await tx.run(
+          `INSERT INTO client_password_changes (member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at)
+           VALUES (?, ?, ?, ?, 'Admin', 'admin_console', 'Client portal password reset by Admin.', ?)`,
+          [id, newName, newPhone, newEmail, nowTs]
+        );
       }
 
       await tx.run('UPDATE investments SET member_phone = ?, member_name = ? WHERE member_id = ?', [newPhone, newName, id]);
@@ -1681,6 +1822,7 @@ app.delete(
       await tx.run('DELETE FROM member_cycles WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run('DELETE FROM cycle_exit_requests WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run('DELETE FROM client_notifications WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
+      await tx.run('DELETE FROM client_password_changes WHERE member_id = ? OR member_phone = ?', [id, member.phone]);
       await tx.run("DELETE FROM auth_sessions WHERE role = 'member' AND user_id = ?", [id]);
       await tx.run('DELETE FROM members WHERE id = ?', [id]);
     });
@@ -1688,15 +1830,21 @@ app.delete(
   })
 );
 
-async function resolveMember(phoneInput: string, fallbackName: string) {
-  const phone = normalizePhone(phoneInput);
-  const m = await db.get<{ id: number; name: string; phone: string }>('SELECT id, name, phone FROM members WHERE phone = ?', [
-    phone
-  ]);
+async function resolveMember(identifierInput: string, fallbackName: string) {
+  const raw = String(identifierInput || '').trim();
+  const isEmail = raw.includes('@');
+  const phone = isEmail ? '' : normalizePhone(raw);
+  const m = isEmail
+    ? await db.get<{ id: number; name: string; phone: string }>('SELECT id, name, phone FROM members WHERE lower(trim(email)) = lower(?) LIMIT 1', [raw])
+    : await db.get<{ id: number; name: string; phone: string }>('SELECT id, name, phone FROM members WHERE phone = ? OR phone = ? LIMIT 1', [
+        phone,
+        raw
+      ]);
   return {
     memberId: m ? Number(m.id) : null,
     memberPhone: m ? m.phone : phone,
-    memberName: String(fallbackName || (m ? m.name : '')).trim() || 'Client'
+    memberName: String(fallbackName || (m ? m.name : '')).trim() || 'Client',
+    unresolvedEmail: Boolean(isEmail && !m)
   };
 }
 
@@ -1706,8 +1854,9 @@ app.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const b = req.body || {};
-    if (!b.member_phone || !b.plan_name || !b.amount) {
-      res.status(400).json({ error: 'Client phone, plan name, and amount are required.' });
+    const ident = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+    if (!ident || !b.plan_name || !b.amount) {
+      res.status(400).json({ error: 'Client phone or email, plan name, and amount are required.' });
       return;
     }
     const amt = toNonNegativeNumber(b.amount);
@@ -1716,7 +1865,11 @@ app.post(
       res.status(400).json({ error: 'Investment amounts must be valid non-negative numbers.' });
       return;
     }
-    const m = await resolveMember(b.member_phone, b.member_name);
+    const m = await resolveMember(ident, b.member_name);
+    if (m.unresolvedEmail) {
+      res.status(404).json({ error: 'No client account found matching that email address.' });
+      return;
+    }
     const dur = String(b.duration || '60 Days').trim();
     const returnsDate = computeReturnsDate(todayISO(), dur, b.returns_date);
     const info = await db.run(
@@ -1794,8 +1947,9 @@ app.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const b = req.body || {};
-    if (!b.member_phone || !b.account_type) {
-      res.status(400).json({ error: 'Client phone and account type are required.' });
+    const ident = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+    if (!ident || !b.account_type) {
+      res.status(400).json({ error: 'Client phone or email and account type are required.' });
       return;
     }
     const bal = toNonNegativeNumber(b.balance, 0);
@@ -1803,7 +1957,11 @@ app.post(
       res.status(400).json({ error: 'Savings balance must be a valid non-negative number.' });
       return;
     }
-    const m = await resolveMember(b.member_phone, b.member_name);
+    const m = await resolveMember(ident, b.member_name);
+    if (m.unresolvedEmail) {
+      res.status(404).json({ error: 'No client account found matching that email address.' });
+      return;
+    }
     const acctType = String(b.account_type).trim();
     const status = normalizeSavingsStatus(acctType, b.status);
     const info = await db.run(
@@ -1856,8 +2014,9 @@ app.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const b = req.body || {};
-    if (!b.member_phone || !b.amount) {
-      res.status(400).json({ error: 'Client phone and loan amount are required.' });
+    const ident = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+    if (!ident || !b.amount) {
+      res.status(400).json({ error: 'Client phone or email and loan amount are required.' });
       return;
     }
     const amt = toNonNegativeNumber(b.amount);
@@ -1865,7 +2024,11 @@ app.post(
       res.status(400).json({ error: 'Loan amount must be a valid non-negative number.' });
       return;
     }
-    const m = await resolveMember(b.member_phone, b.member_name);
+    const m = await resolveMember(ident, b.member_name);
+    if (m.unresolvedEmail) {
+      res.status(404).json({ error: 'No client account found matching that email address.' });
+      return;
+    }
     const dur = String(b.duration || '30 days').trim();
     const reqDate = String(b.request_date || todayISO());
     const returnDate = computeLoanReturnDate(reqDate, dur, b.return_date);
@@ -1948,7 +2111,12 @@ app.post(
       res.status(400).json({ error: 'Contribution must be a valid non-negative number.' });
       return;
     }
-    const m = await resolveMember(b.member_phone || '', b.member_name || '');
+    const ident = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+    const m = await resolveMember(ident, b.member_name || '');
+    if (m.unresolvedEmail) {
+      res.status(404).json({ error: 'No client account found matching that email address.' });
+      return;
+    }
     const totalClients = Math.max(2, Number(b.number_of_members || 10));
     const cycleNum = Math.min(totalClients, Math.max(1, Number(b.cycle_number || 1)));
     const cycleType = String(b.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public';
@@ -2350,6 +2518,7 @@ app.post(
           await tx.run('DELETE FROM member_cycles WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run('DELETE FROM cycle_exit_requests WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run('DELETE FROM client_notifications WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
+          await tx.run('DELETE FROM client_password_changes WHERE member_id = ? OR member_phone = ?', [member.id, member.phone]);
           await tx.run("DELETE FROM auth_sessions WHERE role = 'member' AND user_id = ?", [member.id]);
           await tx.run('DELETE FROM members WHERE id = ?', [member.id]);
         }

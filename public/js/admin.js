@@ -24,7 +24,8 @@
     testimonials: [],
     requests: [],
     deletionRequests: [],
-    cycleExitRequests: []
+    cycleExitRequests: [],
+    passwordChanges: []
   };
 
   function getToken() {
@@ -843,6 +844,28 @@
           );
         }).join('') || '<p style="font-size:0.86rem;color:var(--text-muted);">No savings cycles recorded for this client.</p>';
 
+        var auditWrap = document.getElementById('inspectorPasswordAudit');
+        if (auditWrap) {
+          var lastUpdated = m.password_updated_at ? String(m.password_updated_at).replace('T', ' ').slice(0, 16) : 'Initial setup';
+          var changedBy = m.password_changed_by || 'Admin';
+          var changesList = Array.isArray(m.password_changes) ? m.password_changes : [];
+          var changesRows = changesList.map(function (pc) {
+            return (
+              '<tr>' +
+                '<td class="font-mono-num">' + site.escapeHtml(String(pc.changed_at || '').replace('T', ' ').slice(0, 16)) + '</td>' +
+                '<td><span class="status-text ' + (String(pc.changed_by || '').toLowerCase() === 'client' ? 'status-pending' : 'status-active') + '">' + site.escapeHtml(pc.changed_by || 'Admin') + '</span></td>' +
+                '<td>' + site.escapeHtml(pc.change_note || 'Password updated') + '</td>' +
+              '</tr>'
+            );
+          }).join('') || '<tr><td colspan="3">No recorded password changes yet.</td></tr>';
+          auditWrap.innerHTML =
+            '<div class="inspector-section-block">' +
+              '<h4>Password &amp; Security Activity</h4>' +
+              '<p style="font-size:0.86rem;color:var(--text-muted);margin-bottom:10px;">Last password update: <strong>' + site.escapeHtml(lastUpdated) + '</strong> · By: <strong>' + site.escapeHtml(changedBy) + '</strong></p>' +
+              '<div class="table-wrap"><table class="data-table"><thead><tr><th>Date / Time</th><th>Changed By</th><th>Details</th></tr></thead><tbody>' + changesRows + '</tbody></table></div>' +
+            '</div>';
+        }
+
         var wrap = document.getElementById('inspectorLedgers');
         wrap.innerHTML =
           '<div class="inspector-section-block"><h4>Update Client Investments (' + (m.investments || []).length + ')</h4>' + invHtml + '</div>' +
@@ -971,25 +994,34 @@
   function renderMembers(filterText) {
     var q = String(filterText || '').trim().toLowerCase();
     var list = !q ? state.members : state.members.filter(function (m) {
-      return String(m.name).toLowerCase().includes(q) || String(m.phone).toLowerCase().includes(q);
+      return (
+        String(m.name || '').toLowerCase().includes(q) ||
+        String(m.phone || '').toLowerCase().includes(q) ||
+        String(m.email || '').toLowerCase().includes(q)
+      );
     });
     var tbody = document.getElementById('membersTableBody');
     tbody.innerHTML = list.map(function (m) {
+      var passInfo = m.password_updated_at
+        ? String(m.password_updated_at).replace('T', ' ').slice(0, 16) + ' (' + (m.password_changed_by || 'Admin') + ')'
+        : 'Initial setup';
       return (
         '<tr>' +
           '<td><strong>' + site.escapeHtml(m.name) + '</strong></td>' +
           '<td class="font-mono-num">' + site.escapeHtml(m.phone) + '</td>' +
+          '<td>' + site.escapeHtml(m.email || '--') + '</td>' +
           '<td>' + site.escapeHtml(m.group_name || '--') + '</td>' +
           '<td class="tabular-nums">' + site.formatUGX(m.balance) + '</td>' +
           '<td class="tabular-nums">' + site.formatUGX(m.total_invested) + '</td>' +
+          '<td style="font-size:0.82rem;">' + site.escapeHtml(passInfo) + '</td>' +
           '<td>' + site.escapeHtml(m.status) + '</td>' +
           '<td><div class="table-actions">' +
-            '<button type="button" class="btn btn-outline btn-sm inspect-mem-btn" data-phone="' + site.escapeHtml(m.phone) + '">Update Client</button>' +
+            '<button type="button" class="btn btn-outline btn-sm inspect-mem-btn" data-phone="' + site.escapeHtml(m.phone || m.email) + '">Update Client</button>' +
             '<button type="button" class="btn btn-danger btn-sm del-mem-btn" data-id="' + m.id + '">Delete</button>' +
           '</div></td>' +
         '</tr>'
       );
-    }).join('') || '<tr><td colspan="7">No matching clients found.</td></tr>';
+    }).join('') || '<tr><td colspan="9">No matching clients found.</td></tr>';
 
     tbody.querySelectorAll('.inspect-mem-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -1005,6 +1037,26 @@
           .catch(function (e) { showToast(e.message, true); });
       });
     });
+  }
+
+  function renderPasswordChanges() {
+    var tbody = document.getElementById('passwordChangesTableBody');
+    if (!tbody) return;
+    var list = state.passwordChanges || [];
+    tbody.innerHTML = list.map(function (pc) {
+      var by = String(pc.changed_by || 'Admin');
+      var badgeCls = by.toLowerCase() === 'client' ? 'status-pending' : 'status-active';
+      return (
+        '<tr>' +
+          '<td class="font-mono-num">' + site.escapeHtml(String(pc.changed_at || '').replace('T', ' ').slice(0, 16)) + '</td>' +
+          '<td><strong>' + site.escapeHtml(pc.member_name || '--') + '</strong></td>' +
+          '<td class="font-mono-num">' + site.escapeHtml(pc.member_phone || '--') + '</td>' +
+          '<td>' + site.escapeHtml(pc.member_email || '--') + '</td>' +
+          '<td><span class="status-text ' + badgeCls + '">' + site.escapeHtml(by) + '</span></td>' +
+          '<td style="font-size:0.84rem;">' + site.escapeHtml(pc.change_note || 'Password updated') + '</td>' +
+        '</tr>'
+      );
+    }).join('') || '<tr><td colspan="6">No client password changes recorded yet.</td></tr>';
   }
 
   function renderAdminLoans() {
@@ -1217,6 +1269,7 @@
         renderPublicCycles();
         renderUpdates();
         renderMembers(document.getElementById('memberSearchInput').value);
+        renderPasswordChanges();
         renderAdminLoans();
         renderCycleExitRequests();
         renderRequests();
@@ -1689,12 +1742,12 @@
     apiFetch('/api/admin/investments', {
       method: 'POST',
       body: JSON.stringify({
-        member_phone: document.getElementById('fiInvPhone').value,
-        member_name: document.getElementById('fiInvName').value,
-        plan_name: document.getElementById('fiInvPlan').value,
+        member_phone: document.getElementById('fiInvPhone').value.trim(),
+        member_name: document.getElementById('fiInvName').value.trim(),
+        plan_name: document.getElementById('fiInvPlan').value.trim(),
         amount: Number(document.getElementById('fiInvAmt').value),
         expected_return: Number(document.getElementById('fiInvRet').value),
-        duration: document.getElementById('fiInvDur').value,
+        duration: document.getElementById('fiInvDur').value.trim(),
         returns_date: retDateEl ? retDateEl.value : ''
       })
     }).then(function () {
@@ -1710,8 +1763,8 @@
     apiFetch('/api/admin/savings', {
       method: 'POST',
       body: JSON.stringify({
-        member_phone: document.getElementById('fiSavPhone').value,
-        member_name: document.getElementById('fiSavName').value,
+        member_phone: document.getElementById('fiSavPhone').value.trim(),
+        member_name: document.getElementById('fiSavName').value.trim(),
         account_type: acctType,
         balance: Number(document.getElementById('fiSavBal').value),
         status: site.normalizeSavingsStatus(acctType)
@@ -1729,12 +1782,12 @@
     apiFetch('/api/admin/loans', {
       method: 'POST',
       body: JSON.stringify({
-        member_phone: document.getElementById('fiLoanPhone').value,
-        member_name: document.getElementById('fiLoanName').value,
+        member_phone: document.getElementById('fiLoanPhone').value.trim(),
+        member_name: document.getElementById('fiLoanName').value.trim(),
         amount: Number(document.getElementById('fiLoanAmt').value),
-        duration: document.getElementById('fiLoanDur').value,
-        purpose: document.getElementById('fiLoanPurpose').value,
-        interest_rate: document.getElementById('fiLoanRate').value,
+        duration: document.getElementById('fiLoanDur').value.trim(),
+        purpose: document.getElementById('fiLoanPurpose').value.trim(),
+        interest_rate: document.getElementById('fiLoanRate').value.trim(),
         return_date: loanRetEl ? loanRetEl.value : '',
         status: document.getElementById('fiLoanStatus').value
       })
@@ -1754,9 +1807,9 @@
     apiFetch('/api/admin/member-cycles', {
       method: 'POST',
       body: JSON.stringify({
-        member_phone: document.getElementById('fiCycPhone').value,
-        member_name: document.getElementById('fiCycName').value,
-        cycle_name: document.getElementById('fiCycTitle').value,
+        member_phone: document.getElementById('fiCycPhone').value.trim(),
+        member_name: document.getElementById('fiCycName').value.trim(),
+        cycle_name: document.getElementById('fiCycTitle').value.trim(),
         contribution: Number(document.getElementById('fiCycContrib').value),
         number_of_members: Number(document.getElementById('fiCycMembers').value),
         cycle_number: Number(cycNumEl ? cycNumEl.value || 1 : 1),
@@ -1817,7 +1870,11 @@
         var secNoteEl = document.getElementById('secCurrentAdminNote');
         if (secNoteEl) secNoteEl.textContent = 'Currently signed in as: ' + res.email;
       }
-      showToast('Administrator credentials updated.', false);
+      var toastMsg = 'Administrator credentials updated.';
+      if (res && res.note) {
+        toastMsg += ' ' + res.note;
+      }
+      showToast(toastMsg, false);
     }).catch(function (err) { showToast(err.message, true); });
   });
 

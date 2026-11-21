@@ -461,14 +461,14 @@
             <div class="panel-header-bar">
               <h2>Clients Directory</h2>
               <div class="search-inline-group">
-                <input type="search" id="memberSearchInput" placeholder="Search by phone or name..." />
+                <input type="search" id="memberSearchInput" placeholder="Search by name, phone, or email..." />
                 <button type="button" id="memberSearchBtn" class="btn btn-primary btn-sm">Find Client</button>
               </div>
             </div>
 
             <div class="table-wrap">
               <table class="data-table">
-                <thead><tr><th>Name</th><th>Phone</th><th>Group</th><th>Balance</th><th>Total Invested</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Group</th><th>Balance</th><th>Total Invested</th><th>Password Activity</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="membersTableBody"></tbody>
               </table>
             </div>
@@ -493,7 +493,19 @@
               </div>
               <button type="submit" class="btn btn-primary btn-sm">Save Client Changes</button>
             </form>
+            <div id="inspectorPasswordAudit" style="margin-bottom:20px;"></div>
             <div id="inspectorLedgers"></div>
+          </div>
+
+          <div class="panel-card">
+            <h3>Client Password Changes &amp; Activity</h3>
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">Audit log of every client portal password update performed by clients or administrators.</p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Date / Time</th><th>Client</th><th>Phone</th><th>Email</th><th>Changed By</th><th>Details</th></tr></thead>
+                <tbody id="passwordChangesTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -580,7 +592,7 @@
             <div class="panel-card panel-form-card">
               <h3>Record Client Investment</h3>
               <form id="addInvForm">
-                <div class="form-field"><label for="fiInvPhone">Client Phone</label><input type="tel" id="fiInvPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiInvPhone">Client Phone or Email</label><input type="text" id="fiInvPhone" required placeholder="0752000000 or client@email.com" /></div>
                 <div class="form-field"><label for="fiInvName">Client Name (Optional if registered)</label><input type="text" id="fiInvName" /></div>
                 <div class="form-field"><label for="fiInvPlan">Investment Plan Name</label><input type="text" id="fiInvPlan" required placeholder="e.g., Poultry Farm" /></div>
                 <div class="form-grid">
@@ -598,7 +610,7 @@
             <div class="panel-card panel-form-card">
               <h3>Add Savings Account</h3>
               <form id="addSavForm">
-                <div class="form-field"><label for="fiSavPhone">Client Phone</label><input type="tel" id="fiSavPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiSavPhone">Client Phone or Email</label><input type="text" id="fiSavPhone" required placeholder="0752000000 or client@email.com" /></div>
                 <div class="form-field"><label for="fiSavName">Client Name (Optional if registered)</label><input type="text" id="fiSavName" /></div>
                 <div class="form-field">
                   <label for="fiSavType">Account Type</label>
@@ -615,7 +627,7 @@
             <div class="panel-card panel-form-card">
               <h3>Issue / Record Client Loan</h3>
               <form id="addLoanForm">
-                <div class="form-field"><label for="fiLoanPhone">Client Phone</label><input type="tel" id="fiLoanPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiLoanPhone">Client Phone or Email</label><input type="text" id="fiLoanPhone" required placeholder="0752000000 or client@email.com" /></div>
                 <div class="form-field"><label for="fiLoanName">Client Name (Optional if registered)</label><input type="text" id="fiLoanName" /></div>
                 <div class="form-grid">
                   <div class="form-field"><label for="fiLoanAmt">Loan Amount (UGX)</label><input type="number" id="fiLoanAmt" required /></div>
@@ -639,7 +651,7 @@
             <div class="panel-card panel-form-card">
               <h3>Add Client Cycle</h3>
               <form id="addCycleForm">
-                <div class="form-field"><label for="fiCycPhone">Client Phone</label><input type="tel" id="fiCycPhone" required placeholder="0752000000" /></div>
+                <div class="form-field"><label for="fiCycPhone">Client Phone or Email</label><input type="text" id="fiCycPhone" required placeholder="0752000000 or client@email.com" /></div>
                 <div class="form-field"><label for="fiCycName">Client Name (Optional if registered)</label><input type="text" id="fiCycName" /></div>
                 <div class="form-field"><label for="fiCycTitle">Cycle Name</label><input type="text" id="fiCycTitle" required placeholder="e.g., Group 1 - Kawempe Savers" /></div>
                 <div class="form-grid">

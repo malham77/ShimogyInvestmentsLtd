@@ -1,4 +1,4 @@
-/* SHIMOGY Supabase Auth & PostgREST Live Bridge (Cross-Device / All Hosts) */
+/* SHIMOGY Supabase Auth, Member Portal RPC & PostgREST Live Bridge (Cross-Device / All Hosts) */
 (function () {
   'use strict';
 
@@ -23,6 +23,10 @@
 
   function todayISO() {
     return new Date().toISOString().split('T')[0];
+  }
+
+  function nowTimestampISO() {
+    return new Date().toISOString().replace('T', ' ').slice(0, 19);
   }
 
   function addDaysISO(baseDateStr, days) {
@@ -99,7 +103,84 @@
     if (!m) return m;
     var copy = Object.assign({}, m);
     delete copy.password_hash;
+    delete copy.pg_pass_hash;
     return copy;
+  }
+
+  // Synchronous UTF-8 SHA-256 hex helper (matches PostgreSQL pgcrypto convert_to + sha256)
+  function sha256Hex(str) {
+    var K = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    var bytes = unescape(encodeURIComponent(String(str)));
+    var words = [];
+    var i;
+    for (i = 0; i < bytes.length; i++) {
+      words[i >> 2] = (words[i >> 2] || 0) | ((bytes.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8));
+    }
+    var bitLen = bytes.length * 8;
+    words[bitLen >> 5] = (words[bitLen >> 5] || 0) | (0x80 << (24 - (bitLen % 32)));
+    words[(((bitLen + 64) >> 9) << 4) + 15] = bitLen;
+
+    var H = [
+      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ];
+    var w = new Array(64);
+    var rotr = function (n, x) { return (x >>> n) | (x << (32 - n)); };
+
+    for (i = 0; i < words.length; i += 16) {
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (var t = 0; t < 64; t++) {
+        if (t < 16) {
+          w[t] = words[i + t] | 0;
+        } else {
+          var s0 = rotr(7, w[t - 15]) ^ rotr(18, w[t - 15]) ^ (w[t - 15] >>> 3);
+          var s1 = rotr(17, w[t - 2]) ^ rotr(19, w[t - 2]) ^ (w[t - 2] >>> 10);
+          w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+        }
+        var S1 = rotr(6, e) ^ rotr(11, e) ^ rotr(25, e);
+        var ch = (e & f) ^ ((~e) & g);
+        var temp1 = (h + S1 + ch + K[t] + w[t]) | 0;
+        var S0 = rotr(2, a) ^ rotr(13, a) ^ rotr(22, a);
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var temp2 = (S0 + maj) | 0;
+        h = g; g = f; f = e; e = (d + temp1) | 0;
+        d = c; c = b; b = a; a = (temp1 + temp2) | 0;
+      }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+    }
+    return H.map(function (v) { return (v >>> 0).toString(16).padStart(8, '0'); }).join('');
+  }
+
+  function randomHex(byteCount) {
+    var out = '';
+    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      var arr = new Uint8Array(byteCount);
+      window.crypto.getRandomValues(arr);
+      for (var i = 0; i < arr.length; i++) {
+        out += arr[i].toString(16).padStart(2, '0');
+      }
+      return out;
+    }
+    for (var j = 0; j < byteCount; j++) {
+      out += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+    }
+    return out;
+  }
+
+  function hashPgPassword(password) {
+    var salt = randomHex(16);
+    var digest = sha256Hex(salt + ':' + String(password));
+    return 'sha256:' + salt + ':' + digest;
   }
 
   function sbHeaders(accessToken, extra) {
@@ -136,9 +217,10 @@
 
   function unwrapToken(rawToken) {
     var t = String(rawToken || '');
-    if (t.indexOf('sb_adm_') === 0) return { prefix: 'sb_adm_', role: 'admin', jwt: t.slice(7) };
-    if (t.indexOf('sb_mem_') === 0) return { prefix: 'sb_mem_', role: 'member', jwt: t.slice(7) };
-    return { prefix: '', role: '', jwt: '' };
+    if (t.indexOf('sb_adm_') === 0) return { prefix: 'sb_adm_', role: 'admin', jwt: t.slice(7), raw: t };
+    if (t.indexOf('sb_mem_') === 0) return { prefix: 'sb_mem_', role: 'member', jwt: t.slice(7), raw: t };
+    if (t.indexOf('pg_mem_') === 0) return { prefix: 'pg_mem_', role: 'member', jwt: '', raw: t };
+    return { prefix: '', role: '', jwt: '', raw: '' };
   }
 
   function parseRespJson(res) {
@@ -168,7 +250,7 @@
 
   function tryRefreshSession(tokenInfo) {
     var rt = getRefreshToken();
-    if (!rt || !tokenInfo || !tokenInfo.prefix) return Promise.resolve(null);
+    if (!rt || !tokenInfo || !tokenInfo.prefix || !tokenInfo.jwt) return Promise.resolve(null);
     return authRequest('token?grant_type=refresh_token', 'POST', { refresh_token: rt }).then(function (r) {
       if (!r.ok || !r.data || !r.data.access_token) return null;
       saveRefreshToken(r.data.refresh_token || rt);
@@ -194,7 +276,7 @@
     })
       .then(function (res) {
         return parseRespJson(res).then(function (data) {
-          if (res.status === 401 && !retried && tokenInfo.prefix) {
+          if (res.status === 401 && !retried && tokenInfo.prefix && tokenInfo.jwt) {
             return tryRefreshSession(tokenInfo).then(function (newJwt) {
               if (!newJwt) return { ok: false, status: 401, data: data || { error: 'Session expired. Please sign in again.' } };
               tokenInfo.jwt = newJwt;
@@ -317,59 +399,124 @@
     });
   }
 
+  function normalizeMemberProfile(rawMember) {
+    if (!rawMember) return rawMember;
+    var clean = sanitizeMember(rawMember);
+    clean.investments = (rawMember.investments || []).map(function (inv) {
+      return Object.assign({}, inv, {
+        returns_date: inv.returns_date || computeReturnsDate(String(inv.created_at || todayISO()), String(inv.duration || '60 Days'))
+      });
+    });
+    clean.savings = (rawMember.savings || []).map(function (s) {
+      return Object.assign({}, s, {
+        status: normalizeSavingsStatus(s.account_type, s.status)
+      });
+    });
+    clean.loans = (rawMember.loans || []).map(function (l) {
+      return Object.assign({}, l, {
+        return_date: l.return_date || computeLoanReturnDate(String(l.request_date || todayISO()), String(l.duration || '30 days'))
+      });
+    });
+    clean.cycles = rawMember.cycles || [];
+    clean.notifications = rawMember.notifications || [];
+    return clean;
+  }
+
+  function belongsToMemberRow(row, memberId, normSelfPhone) {
+    if (row.member_id !== null && row.member_id !== undefined) {
+      return Number(row.member_id) === Number(memberId);
+    }
+    var rNorm = normalizePhone(String(row.member_phone || ''));
+    return Boolean(normSelfPhone && rNorm && rNorm === normSelfPhone);
+  }
+
+  function buildStrictMemberFilter(memberId, memberPhone) {
+    var cleanPhone = String(memberPhone || '').trim();
+    if (!cleanPhone) return 'member_id=eq.' + encodeURIComponent(memberId);
+    return 'or=(member_id.eq.' + encodeURIComponent(memberId) + ',and(member_id.is.null,member_phone.eq.' + encodeURIComponent(cleanPhone) + '))';
+  }
+
   function fetchMemberFullProfileRest(tokenInfo) {
-    return restRaw('GET', 'members?select=*&limit=1', undefined, tokenInfo).then(function (mRes) {
-      if (!mRes.ok) return { ok: false, status: mRes.status, data: mRes.data };
-      var member = Array.isArray(mRes.data) && mRes.data[0] ? mRes.data[0] : null;
-      if (!member) {
-        return {
-          ok: false,
-          status: 404,
-          data: { error: 'No client ledger profile matches your Supabase Auth email. Ask Operations to link your email in Clients Directory.' }
-        };
+    if (tokenInfo.prefix === 'pg_mem_' && tokenInfo.raw) {
+      return rpcCall('member_portal_get_profile', { p_token: tokenInfo.raw }).then(function (r) {
+        if (!r.ok || !r.data) {
+          return { ok: false, status: r.status || 401, data: r.data || { error: 'Session expired. Please sign in again.' } };
+        }
+        if (!r.data.ok || !r.data.member) {
+          return {
+            ok: false,
+            status: Number(r.data.status || 401),
+            data: { error: r.data.error || 'Session expired. Please sign in again.' }
+          };
+        }
+        return { ok: true, status: 200, data: { member: normalizeMemberProfile(r.data.member) } };
+      });
+    }
+
+    return authRequest('user', 'GET', undefined, tokenInfo.jwt).then(function (uRes) {
+      var authEmail = String((uRes.ok && uRes.data && uRes.data.email) || '').trim().toLowerCase();
+      if (!authEmail) {
+        return { ok: false, status: 401, data: { error: 'Session expired. Please sign in again.' } };
       }
-      return Promise.all([
-        restGet('investments?order=id.desc', tokenInfo),
-        restGet('savings?order=id.desc', tokenInfo),
-        restGet('loans?order=id.desc', tokenInfo),
-        restGet('member_cycles?order=id.desc', tokenInfo),
-        restGet('client_notifications?order=id.desc&limit=30', tokenInfo),
-        rpcCall('get_my_cycle_co_members', {}, tokenInfo)
-      ]).then(function (parts) {
-        var investments = (parts[0] || []).map(function (inv) {
-          return Object.assign({}, inv, {
-            returns_date: inv.returns_date || computeReturnsDate(String(inv.created_at || todayISO()), String(inv.duration || '60 Days'))
-          });
+      return restRaw('GET', 'members?email=ilike.' + encodeURIComponent(authEmail) + '&select=*&limit=1', undefined, tokenInfo).then(function (mRes) {
+        if (!mRes.ok) return { ok: false, status: mRes.status, data: mRes.data };
+        var member = Array.isArray(mRes.data) && mRes.data[0] ? mRes.data[0] : null;
+        if (!member) {
+          return {
+            ok: false,
+            status: 404,
+            data: { error: 'No client ledger profile matches your Supabase Auth email. Ask Operations to link your email in Clients Directory.' }
+          };
+        }
+        var mId = Number(member.id);
+        var normPhone = normalizePhone(member.phone || '');
+        var filt = buildStrictMemberFilter(mId, member.phone);
+
+        return Promise.all([
+          restGet('investments?' + filt + '&order=id.desc', tokenInfo),
+          restGet('savings?' + filt + '&order=id.desc', tokenInfo),
+          restGet('loans?' + filt + '&order=id.desc', tokenInfo),
+          restGet('member_cycles?' + filt + '&order=id.desc', tokenInfo),
+          restGet('client_notifications?' + filt + '&order=id.desc&limit=30', tokenInfo),
+          rpcCall('get_my_cycle_co_members', {}, tokenInfo)
+        ]).then(function (parts) {
+          var invs = (parts[0] || []).filter(function (row) { return belongsToMemberRow(row, mId, normPhone); });
+          var savs = (parts[1] || []).filter(function (row) { return belongsToMemberRow(row, mId, normPhone); });
+          var loans = (parts[2] || []).filter(function (row) { return belongsToMemberRow(row, mId, normPhone); });
+          var rawCycs = (parts[3] || []).filter(function (row) { return belongsToMemberRow(row, mId, normPhone); });
+          var notifs = (parts[4] || []).filter(function (row) { return belongsToMemberRow(row, mId, normPhone); });
+          var peerRows = parts[5] && parts[5].ok && Array.isArray(parts[5].data) ? parts[5].data : [];
+          var cycles = attachCoMembers(rawCycs, peerRows);
+          var profile = normalizeMemberProfile(
+            Object.assign({}, member, {
+              investments: invs,
+              savings: savs,
+              loans: loans,
+              cycles: cycles,
+              notifications: notifs
+            })
+          );
+          return { ok: true, status: 200, data: { member: profile } };
         });
-        var savings = (parts[1] || []).map(function (s) {
-          return Object.assign({}, s, {
-            status: normalizeSavingsStatus(s.account_type, s.status)
-          });
-        });
-        var loans = (parts[2] || []).map(function (l) {
-          return Object.assign({}, l, {
-            return_date: l.return_date || computeLoanReturnDate(String(l.request_date || todayISO()), String(l.duration || '30 days'))
-          });
-        });
-        var peerRows = parts[5] && parts[5].ok && Array.isArray(parts[5].data) ? parts[5].data : [];
-        var cycles = attachCoMembers(parts[3] || [], peerRows);
-        var profile = Object.assign({}, sanitizeMember(member), {
-          investments: investments,
-          savings: savings,
-          loans: loans,
-          cycles: cycles,
-          notifications: parts[4] || []
-        });
-        return { ok: true, status: 200, data: { member: profile } };
       });
     });
   }
 
-  function resolveMemberAdmin(phoneInput, fallbackName, tokenInfo) {
-    var phone = normalizePhone(phoneInput || '');
-    return restGet('members?phone=eq.' + encodeURIComponent(phone) + '&select=id,name,phone&limit=1', tokenInfo).then(function (rows) {
+  function resolveMemberAdmin(identifierInput, fallbackName, tokenInfo) {
+    var raw = String(identifierInput || '').trim();
+    var isEmail = raw.indexOf('@') !== -1;
+    var phone = isEmail ? '' : normalizePhone(raw);
+    var queryPath = isEmail
+      ? 'members?email=ilike.' + encodeURIComponent(raw.toLowerCase()) + '&select=id,name,phone,email&limit=1'
+      : 'members?or=(phone.eq.' + encodeURIComponent(phone) + ',phone.eq.' + encodeURIComponent(raw) + ')&select=id,name,phone,email&limit=1';
+    return restGet(queryPath, tokenInfo).then(function (rows) {
       var m = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (!m && isEmail) {
+        return { found: false, isEmail: true, memberId: null, memberPhone: '', memberName: '' };
+      }
       return {
+        found: Boolean(m),
+        isEmail: isEmail,
         memberId: m ? Number(m.id) : null,
         memberPhone: m ? m.phone : phone,
         memberName: String(fallbackName || (m ? m.name : '')).trim() || 'Client'
@@ -471,7 +618,7 @@
     }
 
     // ============================================================
-    // SUPABASE AUTH SIGN-IN ENDPOINTS
+    // ADMIN & CLIENT PORTAL SIGN-IN ENDPOINTS
     // ============================================================
     if (pathOnly === '/api/admin/login' && verb === 'POST') {
       var adminEmail = String(b.email || '').trim().toLowerCase();
@@ -487,7 +634,7 @@
         var user = authRes.data.user;
         var userEmail = String(user.email || adminEmail).trim().toLowerCase();
         var isMetaAdmin = user.app_metadata && String(user.app_metadata.role || '').toLowerCase() === 'admin';
-        var admInfo = { prefix: 'sb_adm_', role: 'admin', jwt: jwt };
+        var admInfo = { prefix: 'sb_adm_', role: 'admin', jwt: jwt, raw: 'sb_adm_' + jwt };
 
         return rpcCall('is_shimogy_admin', {}, admInfo).then(function (rpcRes) {
           var isDbAdmin = Boolean(rpcRes && rpcRes.ok && rpcRes.data === true);
@@ -519,42 +666,65 @@
       var rawId = String(b.email || b.phone || b.identifier || '').trim();
       var memPass = String(b.password || '');
       if (!rawId || !memPass) {
-        return Promise.resolve({ status: 400, data: { error: 'Email and password are required.' } });
+        return Promise.resolve({ status: 400, data: { error: 'Phone number (or email) and password are required.' } });
       }
-      if (rawId.indexOf('@') === -1) {
-        return Promise.resolve({
-          status: 400,
-          data: { error: 'Sign in using your registered Supabase Auth email address and password.' }
-        });
-      }
-      return authRequest('token?grant_type=password', 'POST', { email: rawId.toLowerCase(), password: memPass }).then(function (authRes) {
-        if (!authRes.ok || !authRes.data || !authRes.data.access_token) {
-          return { status: 401, data: { error: 'Invalid Supabase Auth email or password.' } };
+
+      // 1. Primary path: verify against Admin-assigned phone/email + password via live Postgres RPC
+      return rpcCall('verify_member_portal_login', {
+        p_identifier: rawId,
+        p_password: memPass
+      }).then(function (rpcRes) {
+        if (rpcRes.ok && rpcRes.data && rpcRes.data.ok && rpcRes.data.token) {
+          var pgToken = String(rpcRes.data.token);
+          var pgInfo = { prefix: 'pg_mem_', role: 'member', jwt: '', raw: pgToken };
+          return fetchMemberFullProfileRest(pgInfo).then(function (profRes) {
+            if (!profRes.ok) return { status: profRes.status, data: profRes.data };
+            return {
+              status: 200,
+              data: {
+                token: pgToken,
+                member: profRes.data.member
+              }
+            };
+          });
         }
-        var jwt = authRes.data.access_token;
-        var memInfo = { prefix: 'sb_mem_', role: 'member', jwt: jwt };
-        return fetchMemberFullProfileRest(memInfo).then(function (profRes) {
-          if (!profRes.ok) return { status: profRes.status, data: profRes.data };
-          saveRefreshToken(authRes.data.refresh_token || '');
-          return {
-            status: 200,
-            data: {
-              token: 'sb_mem_' + jwt,
-              refresh_token: authRes.data.refresh_token || '',
-              supabaseAuth: true,
-              member: profRes.data.member
+
+        // 2. Fallback: Supabase Auth email login (if registered separately in Supabase Auth Users)
+        if (rawId.indexOf('@') !== -1) {
+          return authRequest('token?grant_type=password', 'POST', { email: rawId.toLowerCase(), password: memPass }).then(function (authRes) {
+            if (!authRes.ok || !authRes.data || !authRes.data.access_token) {
+              return { status: 401, data: { error: (rpcRes.data && rpcRes.data.error) || 'Invalid phone/email or password.' } };
             }
-          };
-        });
+            var jwt = authRes.data.access_token;
+            var memInfo = { prefix: 'sb_mem_', role: 'member', jwt: jwt, raw: 'sb_mem_' + jwt };
+            return fetchMemberFullProfileRest(memInfo).then(function (profRes) {
+              if (!profRes.ok) return { status: profRes.status, data: profRes.data };
+              saveRefreshToken(authRes.data.refresh_token || '');
+              return {
+                status: 200,
+                data: {
+                  token: 'sb_mem_' + jwt,
+                  refresh_token: authRes.data.refresh_token || '',
+                  supabaseAuth: true,
+                  member: profRes.data.member
+                }
+              };
+            });
+          });
+        }
+
+        var rpcErrMsg = (rpcRes.data && rpcRes.data.error) || 'Invalid phone/email or password.';
+        var statusCode = rpcRes.status === 503 ? 503 : 401;
+        return { status: statusCode, data: { error: rpcErrMsg } };
       });
     }
 
     // ============================================================
-    // CLIENT PORTAL AUTHENTICATED ROUTES (PostgREST + RLS)
+    // CLIENT PORTAL AUTHENTICATED ROUTES (Postgres RPC & PostgREST + RLS)
     // ============================================================
     if (pathOnly.indexOf('/api/member/') === 0) {
-      if (tokenInfo.role !== 'member' || !tokenInfo.jwt) {
-        return Promise.resolve({ status: 401, data: { error: 'Client Supabase session required.' } });
+      if (tokenInfo.role !== 'member' || (!tokenInfo.jwt && !tokenInfo.raw)) {
+        return Promise.resolve({ status: 401, data: { error: 'Client session required.' } });
       }
 
       if (pathOnly === '/api/member/me' && verb === 'GET') {
@@ -564,15 +734,36 @@
       }
 
       if (pathOnly === '/api/member/change-password' && verb === 'POST') {
-        if (!b.currentPassword || !b.newPassword || String(b.newPassword).length < 6) {
+        var curPass = String(b.currentPassword || '');
+        var nxtPass = String(b.newPassword || '');
+        if (tokenInfo.prefix === 'pg_mem_') {
+          if (!curPass || nxtPass.length < 4) {
+            return Promise.resolve({ status: 400, data: { error: 'Current password and new password (min 4 characters) are required.' } });
+          }
+          return rpcCall('member_portal_change_password', {
+            p_token: tokenInfo.raw,
+            p_current_password: curPass,
+            p_new_password: nxtPass
+          }).then(function (r) {
+            if (!r.ok || !r.data) {
+              return { status: r.status || 400, data: r.data || { error: 'Failed to update password.' } };
+            }
+            if (!r.data.ok) {
+              return { status: Number(r.data.status || 400), data: { error: r.data.error || 'Could not update password.' } };
+            }
+            return { status: 200, data: { success: true } };
+          });
+        }
+
+        if (!curPass || nxtPass.length < 6) {
           return Promise.resolve({ status: 400, data: { error: 'Current password and new password (min 6 chars) are required.' } });
         }
         return authRequest('user', 'GET', undefined, tokenInfo.jwt).then(function (uRes) {
           var email = uRes.ok && uRes.data && uRes.data.email;
           if (!email) return { status: 401, data: { error: 'Session expired. Please sign in again.' } };
-          return authRequest('token?grant_type=password', 'POST', { email: email, password: String(b.currentPassword) }).then(function (chk) {
+          return authRequest('token?grant_type=password', 'POST', { email: email, password: curPass }).then(function (chk) {
             if (!chk.ok) return { status: 400, data: { error: 'Current password is incorrect.' } };
-            return authRequest('user', 'PUT', { password: String(b.newPassword) }, tokenInfo.jwt).then(function (upd) {
+            return authRequest('user', 'PUT', { password: nxtPass }, tokenInfo.jwt).then(function (upd) {
               if (!upd.ok) return { status: 400, data: { error: (upd.data && (upd.data.msg || upd.data.error)) || 'Failed to update password.' } };
               return { status: 200, data: { success: true } };
             });
@@ -588,51 +779,77 @@
         if (act !== 'exit' && act !== 'stop') {
           return Promise.resolve({ status: 400, data: { error: 'Valid action (exit or stop) is required.' } });
         }
-        return Promise.all([
-          restGet('members?select=id,name,phone&limit=1', tokenInfo),
-          restGet('member_cycles?id=eq.' + cycId + '&limit=1', tokenInfo),
-          rpcCall('get_my_cycle_co_members', {}, tokenInfo)
-        ]).then(function (parts) {
-          var mem = parts[0] && parts[0][0];
-          var cyc = parts[1] && parts[1][0];
-          if (!mem || !cyc) return { status: 404, data: { error: 'Cycle record not found.' } };
-          var curSt = String(cyc.status || 'active').toLowerCase();
-          if (curSt === 'exited' || curSt === 'stopped' || curSt === 'completed') {
-            return { status: 400, data: { error: 'This cycle has already been closed.' } };
-          }
-          if (curSt === 'exit_pending') {
-            return { status: 409, data: { error: 'Your cycle exit request is already awaiting admin approval.' } };
-          }
-          var peers = parts[2] && parts[2].ok && Array.isArray(parts[2].data) ? parts[2].data : [];
-          var hasPeers = peers.some(function (p) {
-            return String(p.cycle_name || '').trim().toLowerCase() === String(cyc.cycle_name || '').trim().toLowerCase();
+
+        if (tokenInfo.prefix === 'pg_mem_') {
+          return rpcCall('member_portal_cycle_action', {
+            p_token: tokenInfo.raw,
+            p_cycle_id: cycId,
+            p_action: act,
+            p_reason: reason
+          }).then(function (r) {
+            if (!r.ok || !r.data) {
+              return { status: r.status || 400, data: r.data || { error: 'Unable to update cycle.' } };
+            }
+            if (!r.data.ok) {
+              return { status: Number(r.data.status || 400), data: { error: r.data.error || 'Unable to update cycle.' } };
+            }
+            return { status: 200, data: r.data };
           });
-          var requiresApproval = act === 'exit' || hasPeers;
-          if (!requiresApproval) {
-            return restPatch('member_cycles?id=eq.' + cycId, { status: 'stopped' }, tokenInfo).then(function (r) {
-              if (!r.ok) return { status: r.status, data: r.data };
-              return { status: 200, data: { success: true, status: 'stopped', pendingApproval: false, message: 'Custom cycle stopped successfully.' } };
+        }
+
+        return authRequest('user', 'GET', undefined, tokenInfo.jwt).then(function (uRes) {
+          var email = String((uRes.ok && uRes.data && uRes.data.email) || '').trim().toLowerCase();
+          if (!email) return { status: 401, data: { error: 'Session expired. Please sign in again.' } };
+          return Promise.all([
+            restGet('members?email=ilike.' + encodeURIComponent(email) + '&select=id,name,phone&limit=1', tokenInfo),
+            restGet('member_cycles?id=eq.' + cycId + '&limit=1', tokenInfo),
+            rpcCall('get_my_cycle_co_members', {}, tokenInfo)
+          ]).then(function (parts) {
+            var mem = parts[0] && parts[0][0];
+            var cyc = parts[1] && parts[1][0];
+            if (!mem || !cyc) return { status: 404, data: { error: 'Cycle record not found.' } };
+            var normMemPhone = normalizePhone(mem.phone || '');
+            if (!belongsToMemberRow(cyc, Number(mem.id), normMemPhone)) {
+              return { status: 403, data: { error: 'You are not authorized to modify this cycle.' } };
+            }
+            var curSt = String(cyc.status || 'active').toLowerCase();
+            if (curSt === 'exited' || curSt === 'stopped' || curSt === 'completed') {
+              return { status: 400, data: { error: 'This cycle has already been closed.' } };
+            }
+            if (curSt === 'exit_pending') {
+              return { status: 409, data: { error: 'Your cycle exit request is already awaiting admin approval.' } };
+            }
+            var peers = parts[2] && parts[2].ok && Array.isArray(parts[2].data) ? parts[2].data : [];
+            var hasPeers = peers.some(function (p) {
+              return String(p.cycle_name || '').trim().toLowerCase() === String(cyc.cycle_name || '').trim().toLowerCase();
             });
-          }
-          return restPatch('member_cycles?id=eq.' + cycId, { status: 'exit_pending' }, tokenInfo).then(function (uRes) {
-            if (!uRes.ok) return { status: uRes.status, data: uRes.data };
-            return restGet("cycle_exit_requests?member_cycle_id=eq." + cycId + "&status=eq.pending&limit=1", tokenInfo).then(function (exRows) {
-              if (Array.isArray(exRows) && exRows.length) {
-                return { status: 200, data: { success: true, status: 'exit_pending', pendingApproval: true, message: 'Cycle exit request submitted. It will take effect once accepted by Admin.' } };
-              }
-              return restPost('cycle_exit_requests', {
-                member_cycle_id: cycId,
-                member_id: mem.id,
-                member_phone: mem.phone,
-                member_name: mem.name || cyc.member_name || 'Client',
-                cycle_name: String(cyc.cycle_name || ''),
-                cycle_type: String(cyc.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
-                action_type: act,
-                reason: reason,
-                status: 'pending'
-              }, tokenInfo, 'return=minimal').then(function (insRes) {
-                if (!insRes.ok) return { status: insRes.status, data: insRes.data };
-                return { status: 200, data: { success: true, status: 'exit_pending', pendingApproval: true, message: 'Cycle exit request submitted. It will take effect once accepted by Admin.' } };
+            var requiresApproval = act === 'exit' || hasPeers;
+            if (!requiresApproval) {
+              return restPatch('member_cycles?id=eq.' + cycId, { status: 'stopped' }, tokenInfo).then(function (r) {
+                if (!r.ok) return { status: r.status, data: r.data };
+                return { status: 200, data: { success: true, status: 'stopped', pendingApproval: false, message: 'Custom cycle stopped successfully.' } };
+              });
+            }
+            return restPatch('member_cycles?id=eq.' + cycId, { status: 'exit_pending' }, tokenInfo).then(function (uRes2) {
+              if (!uRes2.ok) return { status: uRes2.status, data: uRes2.data };
+              return restGet('cycle_exit_requests?member_cycle_id=eq.' + cycId + '&status=eq.pending&limit=1', tokenInfo).then(function (exRows) {
+                if (Array.isArray(exRows) && exRows.length) {
+                  return { status: 200, data: { success: true, status: 'exit_pending', pendingApproval: true, message: 'Cycle exit request submitted. It will take effect once accepted by Admin.' } };
+                }
+                return restPost('cycle_exit_requests', {
+                  member_cycle_id: cycId,
+                  member_id: mem.id,
+                  member_phone: mem.phone,
+                  member_name: mem.name || cyc.member_name || 'Client',
+                  cycle_name: String(cyc.cycle_name || ''),
+                  cycle_type: String(cyc.cycle_type || 'public').toLowerCase() === 'custom' ? 'custom' : 'public',
+                  action_type: act,
+                  reason: reason,
+                  status: 'pending'
+                }, tokenInfo, 'return=minimal').then(function (insRes) {
+                  if (!insRes.ok) return { status: insRes.status, data: insRes.data };
+                  return { status: 200, data: { success: true, status: 'exit_pending', pendingApproval: true, message: 'Cycle exit request submitted. It will take effect once accepted by Admin.' } };
+                });
               });
             });
           });
@@ -640,6 +857,11 @@
       }
 
       if (pathOnly === '/api/member/notifications/read-all' && verb === 'POST') {
+        if (tokenInfo.prefix === 'pg_mem_') {
+          return rpcCall('member_portal_mark_notif_read', { p_token: tokenInfo.raw, p_notif_id: 0 }).then(function (r) {
+            return r.ok && r.data && r.data.ok ? { status: 200, data: { success: true } } : { status: r.status || 400, data: r.data };
+          });
+        }
         return restPatch('client_notifications?is_read=eq.0', { is_read: 1 }, tokenInfo).then(function (r) {
           return r.ok ? { status: 200, data: { success: true } } : { status: r.status, data: r.data };
         });
@@ -647,7 +869,13 @@
 
       var mNotifRead = pathOnly.match(/^\/api\/member\/notifications\/(\d+)\/read$/);
       if (mNotifRead && verb === 'POST') {
-        return restPatch('client_notifications?id=eq.' + Number(mNotifRead[1]), { is_read: 1 }, tokenInfo).then(function (r) {
+        var notifId = Number(mNotifRead[1]);
+        if (tokenInfo.prefix === 'pg_mem_') {
+          return rpcCall('member_portal_mark_notif_read', { p_token: tokenInfo.raw, p_notif_id: notifId }).then(function (r) {
+            return r.ok && r.data && r.data.ok ? { status: 200, data: { success: true } } : { status: r.status || 400, data: r.data };
+          });
+        }
+        return restPatch('client_notifications?id=eq.' + notifId, { is_read: 1 }, tokenInfo).then(function (r) {
           return r.ok ? { status: 200, data: { success: true } } : { status: r.status, data: r.data };
         });
       }
@@ -717,6 +945,9 @@
         if (!newEmail && !newPass) {
           return Promise.resolve({ status: 400, data: { error: 'Enter a new email or password to update.' } });
         }
+        if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+          return Promise.resolve({ status: 400, data: { error: 'Please enter a valid administrator email address.' } });
+        }
         if (newPass && newPass.length < 6) {
           return Promise.resolve({ status: 400, data: { error: 'Password must be at least 6 characters.' } });
         }
@@ -732,12 +963,16 @@
             if (!updRes.ok) {
               return { status: 400, data: { error: (updRes.data && (updRes.data.msg || updRes.data.error)) || 'Supabase Auth update failed.' } };
             }
-            if (payload.email) {
+            var returnedEmail = String((updRes.data && updRes.data.email) || curEmail).trim().toLowerCase();
+            if (payload.email && returnedEmail === payload.email) {
               return restPatch('admin_users?email=ilike.' + encodeURIComponent(curEmail), { email: payload.email }, tokenInfo).then(function () {
                 return { status: 200, data: { success: true, email: payload.email } };
               });
             }
-            return { status: 200, data: { success: true, email: curEmail } };
+            var note = payload.email && returnedEmail !== payload.email
+              ? ' Verification link sent to ' + payload.email + '. Your current email stays ' + curEmail + ' until confirmed.'
+              : '';
+            return { status: 200, data: { success: true, email: curEmail, note: note } };
           });
         });
       }
@@ -765,7 +1000,8 @@
           restGet('testimonials?order=sort_order.asc,id.asc', tokenInfo),
           restGet('service_requests?order=id.desc', tokenInfo),
           restGet('deletion_requests?order=id.desc', tokenInfo),
-          restGet('cycle_exit_requests?order=id.desc', tokenInfo)
+          restGet('cycle_exit_requests?order=id.desc', tokenInfo),
+          restGet('client_password_changes?select=id,member_id,member_name,member_phone,member_email,changed_by,change_source,change_note,changed_at&order=id.desc&limit=100', tokenInfo)
         ]).then(function (parts) {
           if (!parts[0].ok) return { status: parts[0].status, data: parts[0].data };
           var settings = {};
@@ -804,7 +1040,8 @@
               testimonials: parts[10] || [],
               requests: parts[11] || [],
               deletionRequests: parts[12] || [],
-              cycleExitRequests: parts[13] || []
+              cycleExitRequests: parts[13] || [],
+              passwordChanges: parts[14] || []
             }
           };
         });
@@ -1003,63 +1240,94 @@
         return restDelete('updates?id=eq.' + mUpd[1], tokenInfo).then(function (r) { return r.ok ? { status: 200, data: { success: true } } : { status: r.status, data: r.data }; });
       }
 
-      // Member Inspect by Phone
+      // Member Inspect by Phone or Email
       var mInspect = pathOnly.match(/^\/api\/admin\/member\/(.+)$/);
       if (mInspect && verb === 'GET') {
-        var rawPhone = decodeURIComponent(mInspect[1]);
-        var normPhone = normalizePhone(rawPhone);
-        return restGet('members?or=(phone.eq.' + encodeURIComponent(normPhone) + ',phone.eq.' + encodeURIComponent(rawPhone) + ')&limit=1', tokenInfo).then(function (mRows) {
+        var rawParam = decodeURIComponent(mInspect[1]).trim();
+        var isMail = rawParam.indexOf('@') !== -1;
+        var normPhone = isMail ? '' : normalizePhone(rawParam);
+        var mQuery = isMail
+          ? 'members?email=ilike.' + encodeURIComponent(rawParam.toLowerCase()) + '&limit=1'
+          : 'members?or=(phone.eq.' + encodeURIComponent(normPhone) + ',phone.eq.' + encodeURIComponent(rawParam) + ')&limit=1';
+        return restGet(mQuery, tokenInfo).then(function (mRows) {
           var mem = Array.isArray(mRows) && mRows[0] ? mRows[0] : null;
           if (!mem) return { status: 404, data: { error: 'Client not found.' } };
-          var mId = mem.id;
-          var mPhone = mem.phone;
-          var filter = 'or=(member_id.eq.' + mId + ',member_phone.eq.' + encodeURIComponent(mPhone) + ')';
+          var mId = Number(mem.id);
+          var mPhoneNorm = normalizePhone(mem.phone || '');
+          var filt = buildStrictMemberFilter(mId, mem.phone);
           return Promise.all([
-            restGet('investments?' + filter + '&order=id.desc', tokenInfo),
-            restGet('savings?' + filter + '&order=id.desc', tokenInfo),
-            restGet('loans?' + filter + '&order=id.desc', tokenInfo),
-            restGet('member_cycles?' + filter + '&order=id.desc', tokenInfo),
-            restGet('client_notifications?' + filter + '&order=id.desc&limit=30', tokenInfo)
+            restGet('investments?' + filt + '&order=id.desc', tokenInfo),
+            restGet('savings?' + filt + '&order=id.desc', tokenInfo),
+            restGet('loans?' + filt + '&order=id.desc', tokenInfo),
+            restGet('member_cycles?' + filt + '&order=id.desc', tokenInfo),
+            restGet('client_notifications?' + filt + '&order=id.desc&limit=30', tokenInfo),
+            restGet('client_password_changes?member_id=eq.' + mId + '&select=id,member_id,member_name,member_phone,member_email,changed_by,change_source,change_note,changed_at&order=id.desc&limit=25', tokenInfo)
           ]).then(function (parts) {
-            return {
-              status: 200,
-              data: {
-                member: Object.assign({}, sanitizeMember(mem), {
-                  investments: parts[0] || [],
-                  savings: (parts[1] || []).map(function (s) { return Object.assign({}, s, { status: normalizeSavingsStatus(s.account_type, s.status) }); }),
-                  loans: (parts[2] || []).map(function (l) { return Object.assign({}, l, { return_date: l.return_date || computeLoanReturnDate(l.request_date, l.duration) }); }),
-                  cycles: parts[3] || [],
-                  notifications: parts[4] || []
-                })
-              }
-            };
+            var profile = normalizeMemberProfile(
+              Object.assign({}, mem, {
+                investments: (parts[0] || []).filter(function (row) { return belongsToMemberRow(row, mId, mPhoneNorm); }),
+                savings: (parts[1] || []).filter(function (row) { return belongsToMemberRow(row, mId, mPhoneNorm); }),
+                loans: (parts[2] || []).filter(function (row) { return belongsToMemberRow(row, mId, mPhoneNorm); }),
+                cycles: (parts[3] || []).filter(function (row) { return belongsToMemberRow(row, mId, mPhoneNorm); }),
+                notifications: (parts[4] || []).filter(function (row) { return belongsToMemberRow(row, mId, mPhoneNorm); })
+              })
+            );
+            profile.password_changes = parts[5] || [];
+            return { status: 200, data: { member: profile } };
           });
         });
       }
 
-      // Create Member (+ optional ledgers)
+      // Create Member (+ optional ledgers + password change audit)
       if (pathOnly === '/api/admin/members' && verb === 'POST') {
         var cName = String(b.name || '').trim();
         var cPhone = normalizePhone(b.phone || '');
+        var cEmail = String(b.email || '').trim().toLowerCase();
         var cPass = String(b.password || '').trim();
         if (!cName || !cPhone || !cPass) return Promise.resolve({ status: 400, data: { error: 'Name, phone, and password are required.' } });
-        return restGet('members?phone=eq.' + encodeURIComponent(cPhone) + '&select=id&limit=1', tokenInfo).then(function (dup) {
-          if (Array.isArray(dup) && dup.length) return { status: 409, data: { error: 'A client with that phone number already exists.' } };
+        if (cEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cEmail)) {
+          return Promise.resolve({ status: 400, data: { error: 'Please enter a valid client email address.' } });
+        }
+        var dupChecks = [restGet('members?phone=eq.' + encodeURIComponent(cPhone) + '&select=id&limit=1', tokenInfo)];
+        if (cEmail) dupChecks.push(restGet('members?email=ilike.' + encodeURIComponent(cEmail) + '&select=id&limit=1', tokenInfo));
+        return Promise.all(dupChecks).then(function (dups) {
+          if (Array.isArray(dups[0]) && dups[0].length) {
+            return { status: 409, data: { error: 'A client with that phone number already exists.' } };
+          }
+          if (cEmail && Array.isArray(dups[1]) && dups[1].length) {
+            return { status: 409, data: { error: 'Another client already uses that email address.' } };
+          }
+          var pgHash = hashPgPassword(cPass);
+          var nowTs = nowTimestampISO();
           return restPost('members', {
             name: cName,
             phone: cPhone,
-            email: String(b.email || '').trim(),
+            email: cEmail,
             group_name: String(b.group_name || '').trim(),
             balance: toNonNegativeNumber(b.balance, 0),
             total_invested: toNonNegativeNumber(b.total_invested, 0),
             status: String(b.status || 'active'),
-            password_hash: 'supabase_auth',
+            password_hash: pgHash,
+            pg_pass_hash: pgHash,
+            password_updated_at: nowTs,
+            password_changed_by: 'Admin',
             age_verified: b.age_verified === false ? 0 : 1,
             guardian_name: String(b.guardian_name || '').trim()
           }, tokenInfo).then(function (insRes) {
             if (!insRes.ok) return { status: insRes.status, data: insRes.data };
             var mid = (insRes.data && insRes.data[0] && insRes.data[0].id) || null;
-            var ops = [];
+            var ops = [
+              restPost('client_password_changes', {
+                member_id: mid,
+                member_name: cName,
+                member_phone: cPhone,
+                member_email: cEmail,
+                changed_by: 'Admin',
+                change_source: 'admin_create',
+                change_note: 'Admin assigned initial client portal password.',
+                changed_at: nowTs
+              }, tokenInfo, 'return=minimal')
+            ];
             if (b.investment && b.investment.plan_name && Number(b.investment.amount) > 0) {
               var iAmt = Math.max(0, Math.round(Number(b.investment.amount || 0)));
               var iDur = String(b.investment.duration || '60 Days').trim();
@@ -1132,22 +1400,59 @@
             if (!ex) return { status: 404, data: { error: 'Client not found.' } };
             var uPhone = normalizePhone(b.phone || ex.phone);
             var uName = String(b.name || ex.name).trim();
-            return restPatch('members?id=eq.' + targetId, {
-              name: uName,
-              phone: uPhone,
-              email: String(b.email !== undefined ? b.email : ex.email).trim(),
-              group_name: String(b.group_name !== undefined ? b.group_name : ex.group_name).trim(),
-              balance: toNonNegativeNumber(b.balance !== undefined ? b.balance : ex.balance, Number(ex.balance || 0)),
-              total_invested: toNonNegativeNumber(b.total_invested !== undefined ? b.total_invested : ex.total_invested, Number(ex.total_invested || 0)),
-              status: String(b.status !== undefined ? b.status : ex.status)
-            }, tokenInfo).then(function (uRes) {
-              if (!uRes.ok) return { status: uRes.status, data: uRes.data };
-              return Promise.all([
-                restPatch('investments?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
-                restPatch('savings?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
-                restPatch('loans?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
-                restPatch('member_cycles?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo)
-              ]).then(function () { return { status: 200, data: { success: true } }; });
+            var uEmail = String(b.email !== undefined ? b.email : (ex.email || '')).trim().toLowerCase();
+            if (uEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(uEmail)) {
+              return { status: 400, data: { error: 'Please enter a valid client email address.' } };
+            }
+            var emailConflictPromise = uEmail
+              ? restGet('members?email=ilike.' + encodeURIComponent(uEmail) + '&id=neq.' + targetId + '&select=id&limit=1', tokenInfo)
+              : Promise.resolve([]);
+            return emailConflictPromise.then(function (conflicts) {
+              if (uEmail && Array.isArray(conflicts) && conflicts.length) {
+                return { status: 409, data: { error: 'Another client already uses that email address.' } };
+              }
+              var patchData = {
+                name: uName,
+                phone: uPhone,
+                email: uEmail,
+                group_name: String(b.group_name !== undefined ? b.group_name : ex.group_name).trim(),
+                balance: toNonNegativeNumber(b.balance !== undefined ? b.balance : ex.balance, Number(ex.balance || 0)),
+                total_invested: toNonNegativeNumber(b.total_invested !== undefined ? b.total_invested : ex.total_invested, Number(ex.total_invested || 0)),
+                status: String(b.status !== undefined ? b.status : ex.status)
+              };
+              var newPassStr = b.password && String(b.password).trim() ? String(b.password).trim() : '';
+              var nowTs = nowTimestampISO();
+              if (newPassStr) {
+                var pgHash = hashPgPassword(newPassStr);
+                patchData.pg_pass_hash = pgHash;
+                patchData.password_hash = pgHash;
+                patchData.password_updated_at = nowTs;
+                patchData.password_changed_by = 'Admin';
+              }
+              return restPatch('members?id=eq.' + targetId, patchData, tokenInfo).then(function (uRes) {
+                if (!uRes.ok) return { status: uRes.status, data: uRes.data };
+                var sideOps = [
+                  restPatch('investments?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
+                  restPatch('savings?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
+                  restPatch('loans?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo),
+                  restPatch('member_cycles?member_id=eq.' + targetId, { member_phone: uPhone, member_name: uName }, tokenInfo)
+                ];
+                if (newPassStr) {
+                  sideOps.push(
+                    restPost('client_password_changes', {
+                      member_id: targetId,
+                      member_name: uName,
+                      member_phone: uPhone,
+                      member_email: uEmail,
+                      changed_by: 'Admin',
+                      change_source: 'admin_reset',
+                      change_note: 'Admin reset client portal password.',
+                      changed_at: nowTs
+                    }, tokenInfo, 'return=minimal')
+                  );
+                }
+                return Promise.all(sideOps).then(function () { return { status: 200, data: { success: true } }; });
+              });
             });
           });
         }
@@ -1162,7 +1467,8 @@
               restDelete('loans?' + filt, tokenInfo),
               restDelete('member_cycles?' + filt, tokenInfo),
               restDelete('cycle_exit_requests?' + filt, tokenInfo),
-              restDelete('client_notifications?' + filt, tokenInfo)
+              restDelete('client_notifications?' + filt, tokenInfo),
+              restDelete('client_password_changes?' + filt, tokenInfo)
             ]).then(function () {
               return restDelete('members?id=eq.' + targetId, tokenInfo).then(function (dRes) {
                 return dRes.ok ? { status: 200, data: { success: true } } : { status: dRes.status, data: dRes.data };
@@ -1174,8 +1480,10 @@
 
       // Investments CRUD
       if (pathOnly === '/api/admin/investments' && verb === 'POST') {
-        if (!b.member_phone || !b.plan_name || !b.amount) return Promise.resolve({ status: 400, data: { error: 'Client phone, plan name, and amount are required.' } });
-        return resolveMemberAdmin(b.member_phone, b.member_name, tokenInfo).then(function (m) {
+        var invIdent = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+        if (!invIdent || !b.plan_name || !b.amount) return Promise.resolve({ status: 400, data: { error: 'Client phone (or email), plan name, and amount are required.' } });
+        return resolveMemberAdmin(invIdent, b.member_name, tokenInfo).then(function (m) {
+          if (m.isEmail && !m.found) return { status: 404, data: { error: 'No client account found matching that email address.' } };
           var amt = toNonNegativeNumber(b.amount, 0);
           var dur = String(b.duration || '60 Days').trim();
           return restPost('investments', {
@@ -1227,8 +1535,10 @@
 
       // Savings CRUD
       if (pathOnly === '/api/admin/savings' && verb === 'POST') {
-        if (!b.member_phone || !b.account_type) return Promise.resolve({ status: 400, data: { error: 'Client phone and account type are required.' } });
-        return resolveMemberAdmin(b.member_phone, b.member_name, tokenInfo).then(function (m) {
+        var savIdent = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+        if (!savIdent || !b.account_type) return Promise.resolve({ status: 400, data: { error: 'Client phone (or email) and account type are required.' } });
+        return resolveMemberAdmin(savIdent, b.member_name, tokenInfo).then(function (m) {
+          if (m.isEmail && !m.found) return { status: 404, data: { error: 'No client account found matching that email address.' } };
           var bal = toNonNegativeNumber(b.balance, 0);
           var acct = String(b.account_type).trim();
           return restPost('savings', {
@@ -1272,8 +1582,10 @@
 
       // Loans CRUD
       if (pathOnly === '/api/admin/loans' && verb === 'POST') {
-        if (!b.member_phone || !b.amount) return Promise.resolve({ status: 400, data: { error: 'Client phone and loan amount are required.' } });
-        return resolveMemberAdmin(b.member_phone, b.member_name, tokenInfo).then(function (m) {
+        var loanIdent = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
+        if (!loanIdent || !b.amount) return Promise.resolve({ status: 400, data: { error: 'Client phone (or email) and loan amount are required.' } });
+        return resolveMemberAdmin(loanIdent, b.member_name, tokenInfo).then(function (m) {
+          if (m.isEmail && !m.found) return { status: 404, data: { error: 'No client account found matching that email address.' } };
           var dur = String(b.duration || '30 days').trim();
           var reqDate = String(b.request_date || todayISO());
           return restPost('loans', {
@@ -1317,8 +1629,10 @@
 
       // Member Cycles CRUD
       if (pathOnly === '/api/admin/member-cycles' && verb === 'POST') {
+        var cycIdent = String(b.member_phone || b.member_email || b.member_identifier || '').trim();
         if (!b.cycle_name) return Promise.resolve({ status: 400, data: { error: 'Cycle name is required.' } });
-        return resolveMemberAdmin(b.member_phone || '', b.member_name || '', tokenInfo).then(function (m) {
+        return resolveMemberAdmin(cycIdent, b.member_name || '', tokenInfo).then(function (m) {
+          if (m.isEmail && !m.found) return { status: 404, data: { error: 'No client account found matching that email address.' } };
           var totalC = Math.max(2, Number(b.number_of_members || 10));
           return restPost('member_cycles', {
             member_id: m.memberId,
@@ -1360,7 +1674,7 @@
             }, tokenInfo).then(function (r) {
               if (!r.ok) return { status: r.status, data: r.data };
               if (!transExit) return { status: 200, data: { success: true } };
-              var processedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+              var processedAt = nowTimestampISO();
               return Promise.all([
                 restPatch('cycle_exit_requests?member_cycle_id=eq.' + mCyc[1] + '&status=eq.pending', { status: 'approved', processed_at: processedAt }, tokenInfo),
                 notifyCyclePeersAdmin({ cycle_name: cName, member_id: ex.member_id, member_phone: ex.member_phone, member_name: ex.member_name }, ex.member_name, tokenInfo)
@@ -1398,7 +1712,7 @@
         return restGet('deletion_requests?id=eq.' + mDel[1] + '&limit=1', tokenInfo).then(function (rows) {
           var reqRow = rows && rows[0];
           if (!reqRow) return { status: 404, data: { error: 'Deletion request not found.' } };
-          var processedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          var processedAt = nowTimestampISO();
           var act = String(b.action || '');
           if (act === 'purge') {
             var p = normalizePhone(reqRow.phone);
@@ -1414,6 +1728,7 @@
                   restDelete('member_cycles?' + f, tokenInfo),
                   restDelete('cycle_exit_requests?' + f, tokenInfo),
                   restDelete('client_notifications?' + f, tokenInfo),
+                  restDelete('client_password_changes?' + f, tokenInfo),
                   restDelete('members?id=eq.' + mem.id, tokenInfo)
                 );
               }
@@ -1443,7 +1758,7 @@
           if (String(reqRow.status || 'pending').toLowerCase() !== 'pending') {
             return { status: 409, data: { error: 'This cycle exit request has already been processed.' } };
           }
-          var processedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          var processedAt = nowTimestampISO();
           if (action === 'approve') {
             var finalSt = String(reqRow.action_type || 'exit').toLowerCase() === 'stop' ? 'stopped' : 'exited';
             return restGet('member_cycles?id=eq.' + reqRow.member_cycle_id + '&limit=1', tokenInfo).then(function (cRows) {

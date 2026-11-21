@@ -8,6 +8,7 @@
   var currentMember = null;
   var pieChartInstance = null;
   var barChartInstance = null;
+  var googleSignInRequested = false;
 
   function getToken() {
     if (memoryToken) return memoryToken;
@@ -174,6 +175,7 @@
     document.getElementById('portalWelcomeTitle').textContent = 'Welcome, ' + (m.name || 'Client');
     document.getElementById('portalMemberMeta').textContent =
       'Registered Phone: ' + (m.phone || '--') +
+      (m.email ? ' · Email: ' + m.email : '') +
       (m.group_name ? ' · Primary Group: ' + m.group_name : '') +
       ' · Status: ' + String(m.status || 'active').toUpperCase();
 
@@ -507,6 +509,7 @@
         return;
       }
       googleMemberBtn.disabled = true;
+      googleSignInRequested = true;
       window.ShimogyCloud.signInMemberWithGoogle()
         .then(function (res) {
           if (window.location.protocol !== 'file:' && res && res.idToken) {
@@ -580,6 +583,9 @@
       return;
     }
 
+    var submitBtn = this.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
     site.apiFetch('/api/member/change-password', {
       method: 'POST',
       headers: {
@@ -591,14 +597,18 @@
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) {
-          fb.innerHTML = '<div class="alert-box alert-error">' + site.escapeHtml(res.data.error || 'Could not update password.') + '</div>';
+          fb.innerHTML = '<div class="alert-box alert-error">' + site.escapeHtml((res.data && res.data.error) || 'Could not update password.') + '</div>';
           return;
         }
-        fb.innerHTML = '<div class="alert-box alert-success">Password updated successfully.</div>';
+        fb.innerHTML = '<div class="alert-box alert-success">Password updated successfully. You can sign in using your updated password next time.</div>';
         document.getElementById('memberChangePassForm').reset();
+        loadMemberProfile();
       })
       .catch(function () {
-        fb.innerHTML = '<div class="alert-box alert-error">Network error.</div>';
+        fb.innerHTML = '<div class="alert-box alert-error">Network error. Please try again.</div>';
+      })
+      .finally(function () {
+        if (submitBtn) submitBtn.disabled = false;
       });
   });
 
@@ -648,7 +658,7 @@
   window.addEventListener('shimogy:cloud-auth', function (e) {
     var detail = (e && e.detail) || {};
     var curToken = getToken();
-    if (detail.user && !detail.isAdmin && (!curToken || curToken.indexOf('cloud_') === 0) && window.ShimogyCloud) {
+    if (googleSignInRequested && detail.user && !detail.isAdmin && (!curToken || curToken.indexOf('cloud_') === 0) && window.ShimogyCloud) {
       if (window.location.protocol !== 'file:' && typeof window.ShimogyCloud.getIdToken === 'function') {
         window.ShimogyCloud.getIdToken()
           .then(function (idToken) { return idToken ? exchangeMemberGoogleToken(idToken) : null; })

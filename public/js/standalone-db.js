@@ -476,13 +476,15 @@
       requests: [],
       deletionRequests: [],
       cycleExitRequests: [],
-      clientNotifications: []
+      clientNotifications: [],
+      passwordChanges: []
     };
   }
 
   function normalizeLoadedDb(db) {
     if (!Array.isArray(db.cycleExitRequests)) db.cycleExitRequests = [];
     if (!Array.isArray(db.clientNotifications)) db.clientNotifications = [];
+    if (!Array.isArray(db.passwordChanges)) db.passwordChanges = [];
     if (Array.isArray(db.investments)) {
       db.investments.forEach(function (inv) {
         if (!inv.returns_date) inv.returns_date = computeReturnsDate(inv.created_at || todayISO(), inv.duration || '60 Days');
@@ -571,7 +573,35 @@
     var copy = Object.assign({}, m);
     delete copy.pass;
     delete copy.password_hash;
+    delete copy.pg_pass_hash;
     return copy;
+  }
+
+  function belongsToMemberRow(row, mRow) {
+    if (row.member_id !== null && row.member_id !== undefined) {
+      return Number(row.member_id) === Number(mRow.id);
+    }
+    var mNorm = normalizePhone(mRow.phone || '');
+    var rNorm = normalizePhone(row.member_phone || '');
+    return Boolean(mNorm && rNorm && mNorm === rNorm);
+  }
+
+  function resolveMemberStandalone(dbObj, identInput, fallbackName) {
+    var raw = String(identInput || '').trim();
+    var isEmail = raw.indexOf('@') !== -1;
+    var norm = isEmail ? '' : normalizePhone(raw);
+    var m = dbObj.members.find(function (x) {
+      if (isEmail) return String(x.email || '').trim().toLowerCase() === raw.toLowerCase();
+      return normalizePhone(x.phone) === norm || x.phone === raw;
+    });
+    return {
+      found: Boolean(m),
+      isEmail: isEmail,
+      memberId: m ? m.id : null,
+      memberPhone: m ? m.phone : norm,
+      memberName: String(fallbackName || (m ? m.name : '')).trim() || 'Client',
+      memberRow: m || null
+    };
   }
 
   function handleStandaloneApi(url, options) {
@@ -647,14 +677,15 @@
 
     if (pathOnly === '/api/member/login' && method === 'POST') {
       var rawIdent = String(body.email || body.phone || body.identifier || '').trim();
+      var rawPass = String(body.password || '');
       var norm = normalizePhone(rawIdent);
       var mem = db.members.find(function (m) {
-        if (rawIdent.indexOf('@') !== -1) {
-          return String(m.email || '').trim().toLowerCase() === rawIdent.toLowerCase();
-        }
-        return m.phone === norm || m.phone === rawIdent;
+        var matchesId = rawIdent.indexOf('@') !== -1
+          ? String(m.email || '').trim().toLowerCase() === rawIdent.toLowerCase()
+          : (normalizePhone(m.phone) === norm || m.phone === rawIdent);
+        return matchesId && m.pass === rawPass;
       });
-      if (!mem || mem.pass !== String(body.password || '')) {
+      if (!mem) {
         return jsonResp(401, { error: 'Invalid phone/email or password.' });
       }
       var mTok = makeToken('mem');
@@ -734,13 +765,13 @@
       if (!mSess || mSess.role !== 'member') return jsonResp(401, { error: 'Authentication required.' });
       var mRow = db.members.find(function (m) { return m.id === mSess.user_id; });
       if (!mRow) return jsonResp(404, { error: 'Client account not found.' });
-      var ownCycles = db.memberCycles.filter(function (c) { return c.member_id === mRow.id || c.member_phone === mRow.phone; });
-      var ownNotifs = (db.clientNotifications || []).filter(function (n) { return n.member_id === mRow.id || n.member_phone === mRow.phone; });
+      var ownCycles = db.memberCycles.filter(function (c) { return belongsToMemberRow(c, mRow); });
+      var ownNotifs = (db.clientNotifications || []).filter(function (n) { return belongsToMemberRow(n, mRow); });
       return jsonResp(200, {
         member: Object.assign(sanitizeMember(mRow), {
-          investments: db.investments.filter(function (i) { return i.member_id === mRow.id || i.member_phone === mRow.phone; }),
-          savings: db.savings.filter(function (s) { return s.member_id === mRow.id || s.member_phone === mRow.phone; }),
-          loans: db.loans.filter(function (l) { return l.member_id === mRow.id || l.member_phone === mRow.phone; }),
+          investments: db.investments.filter(function (i) { return belongsToMemberRow(i, mRow); }),
+          savings: db.savings.filter(function (s) { return belongsToMemberRow(s, mRow); }),
+          loans: db.loans.filter(function (l) { return belongsToMemberRow(l, mRow); }),
           cycles: attachCoMembers(db, mRow, ownCycles),
           notifications: ownNotifs
         })
@@ -841,7 +872,21 @@
       if (!body.newPassword || String(body.newPassword).length < 4) {
         return jsonResp(400, { error: 'New password must be at least 4 characters.' });
       }
+      var cpTs = nowISO();
       cpMem.pass = String(body.newPassword);
+      cpMem.password_updated_at = cpTs;
+      cpMem.password_changed_by = 'Client';
+      db.passwordChanges.unshift({
+        id: nextId(db),
+        member_id: cpMem.id,
+        member_name: cpMem.name,
+        member_phone: cpMem.phone,
+        member_email: cpMem.email || '',
+        changed_by: 'Client',
+        change_source: 'client_portal',
+        change_note: 'Client updated their password via Client Dashboard.',
+        changed_at: cpTs
+      });
       saveDb(db);
       return jsonResp(200, { success: true });
     }
@@ -909,7 +954,8 @@
         testimonials: db.testimonials,
         requests: db.requests,
         deletionRequests: db.deletionRequests,
-        cycleExitRequests: db.cycleExitRequests || []
+        cycleExitRequests: db.cycleExitRequests || [],
+        passwordChanges: (db.passwordChanges || []).slice(0, 100)
       });
     }
 
@@ -1097,37 +1143,59 @@
     // Clients
     var mFind = pathOnly.match(/^\/api\/admin\/member\/(.+)$/);
     if (mFind && method === 'GET') {
-      var lookup = normalizePhone(decodeURIComponent(mFind[1]));
-      var fm = db.members.find(function (x) { return x.phone === lookup || x.phone === decodeURIComponent(mFind[1]); });
+      var rawLookup = decodeURIComponent(mFind[1]).trim();
+      var lookupNorm = normalizePhone(rawLookup);
+      var fm = rawLookup.indexOf('@') !== -1
+        ? db.members.find(function (x) { return String(x.email || '').trim().toLowerCase() === rawLookup.toLowerCase(); })
+        : db.members.find(function (x) { return normalizePhone(x.phone) === lookupNorm || x.phone === rawLookup; });
       if (!fm) return jsonResp(404, { error: 'Client not found.' });
       return jsonResp(200, {
         member: Object.assign(sanitizeMember(fm), {
-          investments: db.investments.filter(function (i) { return i.member_id === fm.id || i.member_phone === fm.phone; }),
-          savings: db.savings.filter(function (s) { return s.member_id === fm.id || s.member_phone === fm.phone; }),
-          loans: db.loans.filter(function (l) { return l.member_id === fm.id || l.member_phone === fm.phone; }),
-          cycles: db.memberCycles.filter(function (c) { return c.member_id === fm.id || c.member_phone === fm.phone; })
+          investments: db.investments.filter(function (i) { return belongsToMemberRow(i, fm); }),
+          savings: db.savings.filter(function (s) { return belongsToMemberRow(s, fm); }),
+          loans: db.loans.filter(function (l) { return belongsToMemberRow(l, fm); }),
+          cycles: db.memberCycles.filter(function (c) { return belongsToMemberRow(c, fm); }),
+          password_changes: (db.passwordChanges || []).filter(function (p) { return p.member_id === fm.id || p.member_phone === fm.phone; }).slice(0, 25)
         })
       });
     }
 
     if (pathOnly === '/api/admin/members' && method === 'POST') {
       var mp = normalizePhone(body.phone || '');
-      if (db.members.some(function (x) { return x.phone === mp; })) {
+      var me = String(body.email || '').trim().toLowerCase();
+      if (db.members.some(function (x) { return normalizePhone(x.phone) === mp; })) {
         return jsonResp(409, { error: 'A client with that phone number already exists.' });
       }
+      if (me && db.members.some(function (x) { return String(x.email || '').trim().toLowerCase() === me; })) {
+        return jsonResp(409, { error: 'Another client already uses that email address.' });
+      }
       var newMid = nextId(db);
+      var createTs = nowISO();
       var memObj = {
         id: newMid,
         name: String(body.name || '').trim(),
         phone: mp,
-        email: String(body.email || '').trim(),
+        email: me,
         group_name: String(body.group_name || '').trim(),
         balance: Math.max(0, Number(body.balance || 0)),
         total_invested: Math.max(0, Number(body.total_invested || 0)),
         status: 'active',
-        pass: String(body.password || '1234')
+        pass: String(body.password || '1234'),
+        password_updated_at: createTs,
+        password_changed_by: 'Admin'
       };
       db.members.unshift(memObj);
+      db.passwordChanges.unshift({
+        id: nextId(db),
+        member_id: newMid,
+        member_name: memObj.name,
+        member_phone: mp,
+        member_email: me,
+        changed_by: 'Admin',
+        change_source: 'admin_create',
+        change_note: 'Admin assigned initial client portal password.',
+        changed_at: createTs
+      });
       if (body.investment && body.investment.plan_name) {
         var iDur = String(body.investment.duration || '60 Days');
         db.investments.unshift(Object.assign({
@@ -1187,14 +1255,34 @@
       if (method === 'PUT') {
         var existingMem = db.members.find(function (x) { return x.id === memId; });
         if (existingMem) {
+          var updEmail = String(body.email ?? existingMem.email ?? '').trim().toLowerCase();
+          if (updEmail && db.members.some(function (x) { return x.id !== memId && String(x.email || '').trim().toLowerCase() === updEmail; })) {
+            return jsonResp(409, { error: 'Another client already uses that email address.' });
+          }
           existingMem.name = String(body.name || existingMem.name).trim();
           existingMem.phone = normalizePhone(body.phone || existingMem.phone);
-          existingMem.email = String(body.email ?? existingMem.email ?? '');
+          existingMem.email = updEmail;
           existingMem.group_name = String(body.group_name ?? existingMem.group_name ?? '');
           existingMem.balance = Math.max(0, Number(body.balance ?? existingMem.balance ?? 0));
           existingMem.total_invested = Math.max(0, Number(body.total_invested ?? existingMem.total_invested ?? 0));
           existingMem.status = String(body.status || existingMem.status || 'active');
-          if (body.password) existingMem.pass = String(body.password);
+          if (body.password && String(body.password).trim()) {
+            var rstTs = nowISO();
+            existingMem.pass = String(body.password).trim();
+            existingMem.password_updated_at = rstTs;
+            existingMem.password_changed_by = 'Admin';
+            db.passwordChanges.unshift({
+              id: nextId(db),
+              member_id: memId,
+              member_name: existingMem.name,
+              member_phone: existingMem.phone,
+              member_email: existingMem.email,
+              changed_by: 'Admin',
+              change_source: 'admin_reset',
+              change_note: 'Admin reset client portal password.',
+              changed_at: rstTs
+            });
+          }
           db.investments.forEach(function (i) { if (i.member_id === memId) { i.member_phone = existingMem.phone; i.member_name = existingMem.name; } });
           db.savings.forEach(function (s) { if (s.member_id === memId) { s.member_phone = existingMem.phone; s.member_name = existingMem.name; } });
           db.loans.forEach(function (l) { if (l.member_id === memId) { l.member_phone = existingMem.phone; l.member_name = existingMem.name; } });
@@ -1209,20 +1297,21 @@
         db.savings = db.savings.filter(function (x) { return x.member_id !== memId; });
         db.loans = db.loans.filter(function (x) { return x.member_id !== memId; });
         db.memberCycles = db.memberCycles.filter(function (x) { return x.member_id !== memId; });
+        db.passwordChanges = (db.passwordChanges || []).filter(function (x) { return x.member_id !== memId; });
         saveDb(db);
         return jsonResp(200, { success: true });
       }
     }
 
     if (pathOnly === '/api/admin/investments' && method === 'POST') {
-      var ip = normalizePhone(body.member_phone || '');
-      var im = db.members.find(function (x) { return x.phone === ip; });
+      var imRes = resolveMemberStandalone(db, body.member_phone || body.member_email || body.member_identifier || '', body.member_name);
+      if (imRes.isEmail && !imRes.found) return jsonResp(404, { error: 'No client account found matching that email address.' });
       var invDur = String(body.duration || '60 Days');
       db.investments.unshift({
         id: nextId(db),
-        member_id: im ? im.id : null,
-        member_phone: ip,
-        member_name: body.member_name || (im ? im.name : 'Client'),
+        member_id: imRes.memberId,
+        member_phone: imRes.memberPhone,
+        member_name: imRes.memberName,
         plan_name: String(body.plan_name || ''),
         amount: Math.max(0, Number(body.amount || 0)),
         expected_return: Math.max(0, Number(body.expected_return || 0)),
@@ -1231,7 +1320,7 @@
         status: String(body.status || 'active'),
         created_at: nowISO()
       });
-      if (im) im.total_invested = Number(im.total_invested || 0) + Math.max(0, Number(body.amount || 0));
+      if (imRes.memberRow) imRes.memberRow.total_invested = Number(imRes.memberRow.total_invested || 0) + Math.max(0, Number(body.amount || 0));
       saveDb(db);
       return jsonResp(201, { success: true });
     }
@@ -1266,22 +1355,22 @@
     }
 
     if (pathOnly === '/api/admin/savings' && method === 'POST') {
-      var sp = normalizePhone(body.member_phone || '');
-      var sm = db.members.find(function (x) { return x.phone === sp; });
+      var smRes = resolveMemberStandalone(db, body.member_phone || body.member_email || body.member_identifier || '', body.member_name);
+      if (smRes.isEmail && !smRes.found) return jsonResp(404, { error: 'No client account found matching that email address.' });
       var acctType = String(body.account_type || 'Current Account');
       var savBal = Math.max(0, Number(body.balance || 0));
       db.savings.unshift({
         id: nextId(db),
-        member_id: sm ? sm.id : null,
-        member_phone: sp,
-        member_name: body.member_name || (sm ? sm.name : 'Client'),
+        member_id: smRes.memberId,
+        member_phone: smRes.memberPhone,
+        member_name: smRes.memberName,
         account_type: acctType,
         balance: savBal,
         open_date: todayISO(),
         status: normalizeSavingsStatus(acctType, body.status),
         created_at: nowISO()
       });
-      if (sm) sm.balance = Number(sm.balance || 0) + savBal;
+      if (smRes.memberRow) smRes.memberRow.balance = Number(smRes.memberRow.balance || 0) + savBal;
       saveDb(db);
       return jsonResp(201, { success: true });
     }
@@ -1307,15 +1396,15 @@
     }
 
     if (pathOnly === '/api/admin/loans' && method === 'POST') {
-      var lp = normalizePhone(body.member_phone || '');
-      var lm = db.members.find(function (x) { return x.phone === lp; });
+      var lmRes = resolveMemberStandalone(db, body.member_phone || body.member_email || body.member_identifier || '', body.member_name);
+      if (lmRes.isEmail && !lmRes.found) return jsonResp(404, { error: 'No client account found matching that email address.' });
       var lDuration = String(body.duration || '30 days');
       var reqDate = String(body.request_date || todayISO());
       db.loans.unshift({
         id: nextId(db),
-        member_id: lm ? lm.id : null,
-        member_phone: lp,
-        member_name: body.member_name || (lm ? lm.name : 'Client'),
+        member_id: lmRes.memberId,
+        member_phone: lmRes.memberPhone,
+        member_name: lmRes.memberName,
         amount: Math.max(0, Number(body.amount || 0)),
         purpose: String(body.purpose || ''),
         duration: lDuration,
@@ -1353,14 +1442,14 @@
     }
 
     if (pathOnly === '/api/admin/member-cycles' && method === 'POST') {
-      var cp = normalizePhone(body.member_phone || '');
-      var cm = db.members.find(function (x) { return x.phone === cp; });
+      var cmRes = resolveMemberStandalone(db, body.member_phone || body.member_email || body.member_identifier || '', body.member_name);
+      if (cmRes.isEmail && !cmRes.found) return jsonResp(404, { error: 'No client account found matching that email address.' });
       var totM = Math.max(2, Number(body.number_of_members || 10));
       db.memberCycles.unshift({
         id: nextId(db),
-        member_id: cm ? cm.id : null,
-        member_phone: cp,
-        member_name: body.member_name || (cm ? cm.name : 'Client'),
+        member_id: cmRes.memberId,
+        member_phone: cmRes.memberPhone,
+        member_name: cmRes.memberName,
         cycle_name: String(body.cycle_name || ''),
         contribution: Math.max(0, Number(body.contribution || 0)),
         payout_duration: String(body.payout_duration || 'Weekly'),
@@ -1428,6 +1517,7 @@
           db.savings = db.savings.filter(function (x) { return x.member_phone !== targetPhone; });
           db.loans = db.loans.filter(function (x) { return x.member_phone !== targetPhone; });
           db.memberCycles = db.memberCycles.filter(function (x) { return x.member_phone !== targetPhone; });
+          db.passwordChanges = (db.passwordChanges || []).filter(function (x) { return x.member_phone !== targetPhone; });
           db.requests = db.requests.filter(function (x) { return x.applicant_phone !== targetPhone; });
         }
         dItem.status = body.action === 'reject' ? 'rejected' : 'completed';

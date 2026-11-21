@@ -25,6 +25,12 @@ export function resolvePostgresConnectionString(): string {
   return '';
 }
 
+export function hashPgPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const digestHex = crypto.createHash('sha256').update(`${salt}:${password}`).digest('hex');
+  return `sha256:${salt}:${digestHex}`;
+}
+
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
   const derived = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -33,6 +39,18 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, stored: string): boolean {
   if (!stored) return false;
+  if (stored.startsWith('sha256:')) {
+    const parts = stored.split(':');
+    const salt = parts[1] || '';
+    const hash = parts[2] || '';
+    if (!salt || !hash) return false;
+    const derived = crypto.createHash('sha256').update(`${salt}:${password}`).digest('hex');
+    try {
+      return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(derived, 'hex'));
+    } catch {
+      return false;
+    }
+  }
   if (!stored.includes(':')) {
     return password === stored;
   }
@@ -359,6 +377,9 @@ CREATE TABLE IF NOT EXISTS members (
   total_invested BIGINT NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   password_hash TEXT NOT NULL,
+  pg_pass_hash TEXT NOT NULL DEFAULT '',
+  password_updated_at TEXT NOT NULL DEFAULT '',
+  password_changed_by TEXT NOT NULL DEFAULT '',
   age_verified INTEGER NOT NULL DEFAULT 1,
   guardian_name TEXT NOT NULL DEFAULT '',
   created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
@@ -478,6 +499,18 @@ CREATE TABLE IF NOT EXISTS client_notifications (
   is_read INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
 );
+
+CREATE TABLE IF NOT EXISTS client_password_changes (
+  id BIGSERIAL PRIMARY KEY,
+  member_id BIGINT,
+  member_name TEXT NOT NULL,
+  member_phone TEXT NOT NULL,
+  member_email TEXT NOT NULL DEFAULT '',
+  changed_by TEXT NOT NULL DEFAULT 'Client',
+  change_source TEXT NOT NULL DEFAULT 'client_portal',
+  change_note TEXT NOT NULL DEFAULT '',
+  changed_at TEXT DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
+);
 `;
 
 export const PG_RLS_SQL = `
@@ -500,6 +533,7 @@ ALTER TABLE deletion_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cycle_exit_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE client_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_password_changes ENABLE ROW LEVEL SECURITY;
 
 -- Role Privileges (enforced strictly by RLS below)
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
@@ -508,7 +542,7 @@ GRANT INSERT ON service_requests, deletion_requests TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   site_settings, admin_users, hero_slides, testimonials, investment_plans, public_cycles,
   updates, members, investments, savings, loans, member_cycles, service_requests,
-  deletion_requests, media_files, cycle_exit_requests, client_notifications
+  deletion_requests, media_files, cycle_exit_requests, client_notifications, client_password_changes
 TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 
@@ -585,7 +619,7 @@ AS $$
   LEFT JOIN public.members m ON m.id = mc.member_id
   CROSS JOIN me
   WHERE LOWER(COALESCE(mc.status, 'active')) NOT IN ('exited', 'stopped')
-    AND NOT (mc.member_id = me.id OR mc.member_phone = me.phone)
+    AND NOT (COALESCE(mc.member_id = me.id, false) OR (COALESCE(me.phone, '') <> '' AND mc.member_phone = me.phone))
     AND COALESCE(NULLIF(m.name, ''), mc.member_name) <> '';
 $$;
 
@@ -683,41 +717,410 @@ CREATE POLICY "Admin full cycle_exit_requests" ON cycle_exit_requests FOR ALL TO
 DROP POLICY IF EXISTS "Admin full client_notifications" ON client_notifications;
 CREATE POLICY "Admin full client_notifications" ON client_notifications FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
 
--- Authenticated Client Self-Service Policies (verified via email -> members record)
+DROP POLICY IF EXISTS "Admin full client_password_changes" ON client_password_changes;
+CREATE POLICY "Admin full client_password_changes" ON client_password_changes FOR ALL TO authenticated USING (public.is_shimogy_admin()) WITH CHECK (public.is_shimogy_admin());
+
+-- Authenticated Client Self-Service Policies (strictly scoped to logged-in client)
 DROP POLICY IF EXISTS "Client read own member" ON members;
 CREATE POLICY "Client read own member" ON members FOR SELECT TO authenticated USING (id = public.shimogy_member_id());
 
 DROP POLICY IF EXISTS "Client read own investments" ON investments;
-CREATE POLICY "Client read own investments" ON investments FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own investments" ON investments FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client read own savings" ON savings;
-CREATE POLICY "Client read own savings" ON savings FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own savings" ON savings FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client read own loans" ON loans;
-CREATE POLICY "Client read own loans" ON loans FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own loans" ON loans FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client read own cycles" ON member_cycles;
-CREATE POLICY "Client read own cycles" ON member_cycles FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own cycles" ON member_cycles FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client request own cycle exit" ON member_cycles;
 CREATE POLICY "Client request own cycle exit" ON member_cycles FOR UPDATE TO authenticated
-  USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone())
-  WITH CHECK ((member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone()) AND status IN ('exit_pending', 'stopped'));
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()))
+  WITH CHECK ((member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone())) AND status IN ('exit_pending', 'stopped'));
 
 DROP POLICY IF EXISTS "Client read own exit requests" ON cycle_exit_requests;
-CREATE POLICY "Client read own exit requests" ON cycle_exit_requests FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own exit requests" ON cycle_exit_requests FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client insert own exit requests" ON cycle_exit_requests;
 CREATE POLICY "Client insert own exit requests" ON cycle_exit_requests FOR INSERT TO authenticated
-  WITH CHECK ((member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone()) AND status = 'pending');
+  WITH CHECK ((member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone())) AND status = 'pending');
 
 DROP POLICY IF EXISTS "Client read own notifications" ON client_notifications;
-CREATE POLICY "Client read own notifications" ON client_notifications FOR SELECT TO authenticated USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+CREATE POLICY "Client read own notifications" ON client_notifications FOR SELECT TO authenticated
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
 
 DROP POLICY IF EXISTS "Client mark own notifications read" ON client_notifications;
 CREATE POLICY "Client mark own notifications read" ON client_notifications FOR UPDATE TO authenticated
-  USING (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone())
-  WITH CHECK (member_id = public.shimogy_member_id() OR member_phone = public.shimogy_member_phone());
+  USING (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()))
+  WITH CHECK (member_id = public.shimogy_member_id() OR (member_id IS NULL AND COALESCE(public.shimogy_member_phone(), '') <> '' AND member_phone = public.shimogy_member_phone()));
+
+-- Cross-Device Client Portal RPCs (Phone/Email + Admin-Assigned Password via auth_sessions)
+CREATE OR REPLACE FUNCTION public.shimogy_verify_pg_pass(p_password text, p_pg_hash text, p_legacy_hash text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_salt text;
+  v_expected text;
+  v_calc text;
+BEGIN
+  IF COALESCE(p_password, '') = '' THEN
+    RETURN false;
+  END IF;
+  IF COALESCE(p_pg_hash, '') LIKE 'sha256:%:%' THEN
+    v_salt := split_part(p_pg_hash, ':', 2);
+    v_expected := split_part(p_pg_hash, ':', 3);
+    IF v_salt <> '' AND v_expected <> '' THEN
+      v_calc := encode(digest(convert_to(v_salt || ':' || p_password, 'UTF8'), 'sha256'), 'hex');
+      IF v_calc = v_expected THEN
+        RETURN true;
+      END IF;
+    END IF;
+  END IF;
+  IF COALESCE(p_legacy_hash, '') LIKE 'sha256:%:%' THEN
+    v_salt := split_part(p_legacy_hash, ':', 2);
+    v_expected := split_part(p_legacy_hash, ':', 3);
+    IF v_salt <> '' AND v_expected <> '' THEN
+      v_calc := encode(digest(convert_to(v_salt || ':' || p_password, 'UTF8'), 'sha256'), 'hex');
+      IF v_calc = v_expected THEN
+        RETURN true;
+      END IF;
+    END IF;
+  END IF;
+  IF COALESCE(p_legacy_hash, '') <> '' AND position(':' in p_legacy_hash) = 0 THEN
+    RETURN p_legacy_hash = p_password;
+  END IF;
+  RETURN false;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.verify_member_portal_login(p_identifier text, p_password text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_raw text := TRIM(COALESCE(p_identifier, ''));
+  v_digits text;
+  v_norm_phone text;
+  v_is_email boolean;
+  rec record;
+  v_token text;
+  v_now text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  v_exp text := to_char((now() AT TIME ZONE 'utc') + interval '7 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+BEGIN
+  IF v_raw = '' OR COALESCE(p_password, '') = '' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Phone number (or email) and password are required.');
+  END IF;
+
+  v_is_email := (position('@' in v_raw) > 0);
+  v_digits := regexp_replace(v_raw, '[^0-9]', '', 'g');
+  IF v_digits LIKE '256%' AND length(v_digits) >= 12 THEN
+    v_norm_phone := '0' || substr(v_digits, 4);
+  ELSIF v_digits <> '' THEN
+    v_norm_phone := v_digits;
+  ELSE
+    v_norm_phone := v_raw;
+  END IF;
+
+  FOR rec IN
+    SELECT *
+    FROM public.members
+    WHERE (v_is_email AND LOWER(TRIM(email)) = LOWER(v_raw))
+       OR (NOT v_is_email AND (phone = v_norm_phone OR phone = v_raw))
+    ORDER BY id ASC
+  LOOP
+    IF public.shimogy_verify_pg_pass(p_password, rec.pg_pass_hash, rec.password_hash) THEN
+      v_token := 'pg_mem_' || encode(gen_random_bytes(24), 'hex');
+      DELETE FROM public.auth_sessions WHERE expires_at <= v_now;
+      INSERT INTO public.auth_sessions (token, role, user_id, identifier, expires_at)
+      VALUES (v_token, 'member', rec.id, rec.phone, v_exp);
+      RETURN jsonb_build_object('ok', true, 'token', v_token, 'member_id', rec.id);
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', false, 'error', 'Invalid phone/email or password.');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.member_portal_get_profile(p_token text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_now text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  v_member_id bigint;
+  v_mem public.members%ROWTYPE;
+  v_phone text;
+  v_invs jsonb;
+  v_savs jsonb;
+  v_loans jsonb;
+  v_cycles jsonb;
+  v_notifs jsonb;
+BEGIN
+  SELECT user_id INTO v_member_id
+  FROM public.auth_sessions
+  WHERE token = COALESCE(p_token, '') AND role = 'member' AND expires_at > v_now
+  LIMIT 1;
+
+  IF v_member_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'status', 401, 'error', 'Session expired. Please sign in again.');
+  END IF;
+
+  SELECT * INTO v_mem FROM public.members WHERE id = v_member_id LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'status', 404, 'error', 'Client account not found.');
+  END IF;
+
+  v_phone := COALESCE(v_mem.phone, '');
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id DESC), '[]'::jsonb) INTO v_invs
+  FROM public.investments t
+  WHERE t.member_id = v_member_id OR (t.member_id IS NULL AND v_phone <> '' AND t.member_phone = v_phone);
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id DESC), '[]'::jsonb) INTO v_savs
+  FROM public.savings t
+  WHERE t.member_id = v_member_id OR (t.member_id IS NULL AND v_phone <> '' AND t.member_phone = v_phone);
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id DESC), '[]'::jsonb) INTO v_loans
+  FROM public.loans t
+  WHERE t.member_id = v_member_id OR (t.member_id IS NULL AND v_phone <> '' AND t.member_phone = v_phone);
+
+  SELECT COALESCE(jsonb_agg((
+    to_jsonb(c) || jsonb_build_object(
+      'co_members',
+      COALESCE((
+        SELECT jsonb_agg(DISTINCT COALESCE(NULLIF(m2.name, ''), p2.member_name) ORDER BY COALESCE(NULLIF(m2.name, ''), p2.member_name))
+        FROM public.member_cycles p2
+        LEFT JOIN public.members m2 ON m2.id = p2.member_id
+        WHERE LOWER(TRIM(p2.cycle_name)) = LOWER(TRIM(c.cycle_name))
+          AND LOWER(COALESCE(p2.status, 'active')) NOT IN ('exited', 'stopped')
+          AND NOT (COALESCE(p2.member_id = v_member_id, false) OR (v_phone <> '' AND p2.member_phone = v_phone))
+          AND COALESCE(NULLIF(m2.name, ''), p2.member_name) <> ''
+      ), '[]'::jsonb)
+    )
+  ) ORDER BY c.id DESC), '[]'::jsonb) INTO v_cycles
+  FROM public.member_cycles c
+  WHERE c.member_id = v_member_id OR (c.member_id IS NULL AND v_phone <> '' AND c.member_phone = v_phone);
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id DESC), '[]'::jsonb) INTO v_notifs
+  FROM (
+    SELECT *
+    FROM public.client_notifications n
+    WHERE n.member_id = v_member_id OR (n.member_id IS NULL AND v_phone <> '' AND n.member_phone = v_phone)
+    ORDER BY n.id DESC
+    LIMIT 30
+  ) t;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'member', (
+      (to_jsonb(v_mem) - 'password_hash' - 'pg_pass_hash') ||
+      jsonb_build_object(
+        'investments', v_invs,
+        'savings', v_savs,
+        'loans', v_loans,
+        'cycles', v_cycles,
+        'notifications', v_notifs
+      )
+    )
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.member_portal_change_password(p_token text, p_current_password text, p_new_password text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_now_iso text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  v_now text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS');
+  v_member_id bigint;
+  v_mem public.members%ROWTYPE;
+  v_salt text;
+  v_hash text;
+BEGIN
+  SELECT user_id INTO v_member_id
+  FROM public.auth_sessions
+  WHERE token = COALESCE(p_token, '') AND role = 'member' AND expires_at > v_now_iso
+  LIMIT 1;
+
+  IF v_member_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'status', 401, 'error', 'Session expired. Please sign in again.');
+  END IF;
+
+  IF length(COALESCE(p_new_password, '')) < 4 THEN
+    RETURN jsonb_build_object('ok', false, 'status', 400, 'error', 'New password must be at least 4 characters.');
+  END IF;
+
+  SELECT * INTO v_mem FROM public.members WHERE id = v_member_id LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'status', 404, 'error', 'Client account not found.');
+  END IF;
+
+  IF NOT public.shimogy_verify_pg_pass(p_current_password, v_mem.pg_pass_hash, v_mem.password_hash) THEN
+    RETURN jsonb_build_object('ok', false, 'status', 400, 'error', 'Current password is incorrect.');
+  END IF;
+
+  v_salt := encode(gen_random_bytes(16), 'hex');
+  v_hash := 'sha256:' || v_salt || ':' || encode(digest(convert_to(v_salt || ':' || p_new_password, 'UTF8'), 'sha256'), 'hex');
+
+  UPDATE public.members
+  SET pg_pass_hash = v_hash,
+      password_hash = v_hash,
+      password_updated_at = v_now,
+      password_changed_by = 'Client'
+  WHERE id = v_member_id;
+
+  INSERT INTO public.client_password_changes (member_id, member_name, member_phone, member_email, changed_by, change_source, change_note, changed_at)
+  VALUES (v_mem.id, v_mem.name, v_mem.phone, v_mem.email, 'Client', 'client_portal', 'Client updated their password via Client Dashboard.', v_now);
+
+  RETURN jsonb_build_object('ok', true, 'updated_at', v_now);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.member_portal_cycle_action(p_token text, p_cycle_id bigint, p_action text, p_reason text DEFAULT '')
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_now_iso text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  v_member_id bigint;
+  v_mem public.members%ROWTYPE;
+  v_cyc public.member_cycles%ROWTYPE;
+  v_act text := LOWER(COALESCE(p_action, ''));
+  v_st text;
+  v_has_peers boolean;
+BEGIN
+  SELECT user_id INTO v_member_id
+  FROM public.auth_sessions
+  WHERE token = COALESCE(p_token, '') AND role = 'member' AND expires_at > v_now_iso
+  LIMIT 1;
+
+  IF v_member_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'status', 401, 'error', 'Authentication required.');
+  END IF;
+  IF v_act NOT IN ('exit', 'stop') THEN
+    RETURN jsonb_build_object('ok', false, 'status', 400, 'error', 'Valid action (exit or stop) is required.');
+  END IF;
+
+  SELECT * INTO v_mem FROM public.members WHERE id = v_member_id LIMIT 1;
+  SELECT * INTO v_cyc FROM public.member_cycles WHERE id = p_cycle_id LIMIT 1;
+  IF NOT FOUND OR v_mem.id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'status', 404, 'error', 'Cycle record not found.');
+  END IF;
+  IF NOT (v_cyc.member_id = v_member_id OR (v_cyc.member_id IS NULL AND v_mem.phone <> '' AND v_cyc.member_phone = v_mem.phone)) THEN
+    RETURN jsonb_build_object('ok', false, 'status', 403, 'error', 'You are not authorized to modify this cycle.');
+  END IF;
+
+  v_st := LOWER(COALESCE(v_cyc.status, 'active'));
+  IF v_st IN ('exited', 'stopped', 'completed') THEN
+    RETURN jsonb_build_object('ok', false, 'status', 400, 'error', 'This cycle has already been closed.');
+  END IF;
+  IF v_st = 'exit_pending' THEN
+    RETURN jsonb_build_object('ok', false, 'status', 409, 'error', 'Your cycle exit request is already awaiting admin approval.');
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM public.member_cycles p
+    WHERE LOWER(TRIM(p.cycle_name)) = LOWER(TRIM(v_cyc.cycle_name))
+      AND LOWER(COALESCE(p.status, 'active')) NOT IN ('exited', 'stopped')
+      AND NOT (COALESCE(p.member_id = v_member_id, false) OR (v_mem.phone <> '' AND p.member_phone = v_mem.phone))
+  ) INTO v_has_peers;
+
+  IF v_act = 'stop' AND NOT v_has_peers THEN
+    UPDATE public.member_cycles SET status = 'stopped' WHERE id = p_cycle_id;
+    RETURN jsonb_build_object('ok', true, 'status', 'stopped', 'pendingApproval', false, 'message', 'Custom cycle stopped successfully.');
+  END IF;
+
+  UPDATE public.member_cycles SET status = 'exit_pending' WHERE id = p_cycle_id;
+  IF NOT EXISTS (SELECT 1 FROM public.cycle_exit_requests WHERE member_cycle_id = p_cycle_id AND status = 'pending') THEN
+    INSERT INTO public.cycle_exit_requests (member_cycle_id, member_id, member_phone, member_name, cycle_name, cycle_type, action_type, reason, status)
+    VALUES (
+      p_cycle_id,
+      v_mem.id,
+      v_mem.phone,
+      COALESCE(NULLIF(v_mem.name, ''), v_cyc.member_name, 'Client'),
+      COALESCE(v_cyc.cycle_name, ''),
+      CASE WHEN LOWER(COALESCE(v_cyc.cycle_type, 'public')) = 'custom' THEN 'custom' ELSE 'public' END,
+      v_act,
+      LEFT(TRIM(COALESCE(p_reason, '')), 500),
+      'pending'
+    );
+  END IF;
+
+  RETURN jsonb_build_object('ok', true, 'status', 'exit_pending', 'pendingApproval', true, 'message', 'Cycle exit request submitted. It will take effect once accepted by Admin.');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.member_portal_mark_notif_read(p_token text, p_notif_id bigint DEFAULT 0)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_now_iso text := to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  v_member_id bigint;
+  v_phone text;
+BEGIN
+  SELECT user_id INTO v_member_id
+  FROM public.auth_sessions
+  WHERE token = COALESCE(p_token, '') AND role = 'member' AND expires_at > v_now_iso
+  LIMIT 1;
+
+  IF v_member_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'status', 401, 'error', 'Authentication required.');
+  END IF;
+
+  SELECT COALESCE(phone, '') INTO v_phone FROM public.members WHERE id = v_member_id LIMIT 1;
+
+  IF COALESCE(p_notif_id, 0) <= 0 THEN
+    UPDATE public.client_notifications
+    SET is_read = 1
+    WHERE member_id = v_member_id OR (member_id IS NULL AND v_phone <> '' AND member_phone = v_phone);
+  ELSE
+    UPDATE public.client_notifications
+    SET is_read = 1
+    WHERE id = p_notif_id
+      AND (member_id = v_member_id OR (member_id IS NULL AND v_phone <> '' AND member_phone = v_phone));
+  END IF;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.shimogy_verify_pg_pass(text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.verify_member_portal_login(text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.member_portal_get_profile(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.member_portal_change_password(text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.member_portal_cycle_action(text, bigint, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.member_portal_mark_notif_read(text, bigint) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.verify_member_portal_login(text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.member_portal_get_profile(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.member_portal_change_password(text, text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.member_portal_cycle_action(text, bigint, text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.member_portal_mark_notif_read(text, bigint) TO anon, authenticated;
 `;
 
 export class DatabaseManager {
@@ -751,7 +1154,7 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS investment_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, expected_return INTEGER NOT NULL, duration TEXT NOT NULL, risk TEXT NOT NULL DEFAULT 'Low', risk_level INTEGER NOT NULL DEFAULT 1, description TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL, image_alt TEXT NOT NULL DEFAULT '', slots_left INTEGER NOT NULL DEFAULT 5, status TEXT NOT NULL DEFAULT 'available', badge TEXT NOT NULL DEFAULT '', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS public_cycles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, contribution INTEGER NOT NULL, payout_duration TEXT NOT NULL DEFAULT 'Monthly', description TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL, image_alt TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'Active', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS updates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'news', excerpt TEXT NOT NULL, detail TEXT NOT NULL, image_url TEXT NOT NULL, image_alt TEXT NOT NULL DEFAULT '', published_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'published');
-      CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL, email TEXT NOT NULL DEFAULT '', group_name TEXT NOT NULL DEFAULT '', balance INTEGER NOT NULL DEFAULT 0, total_invested INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', password_hash TEXT NOT NULL, age_verified INTEGER NOT NULL DEFAULT 1, guardian_name TEXT NOT NULL DEFAULT '', created_at TEXT DEFAULT (datetime('now')));
+      CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL, email TEXT NOT NULL DEFAULT '', group_name TEXT NOT NULL DEFAULT '', balance INTEGER NOT NULL DEFAULT 0, total_invested INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', password_hash TEXT NOT NULL, pg_pass_hash TEXT NOT NULL DEFAULT '', password_updated_at TEXT NOT NULL DEFAULT '', password_changed_by TEXT NOT NULL DEFAULT '', age_verified INTEGER NOT NULL DEFAULT 1, guardian_name TEXT NOT NULL DEFAULT '', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS investments (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, plan_name TEXT NOT NULL, amount INTEGER NOT NULL, expected_return INTEGER NOT NULL, duration TEXT NOT NULL DEFAULT '30 Days', returns_date TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS savings (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, account_type TEXT NOT NULL, balance INTEGER NOT NULL DEFAULT 0, open_date TEXT DEFAULT (date('now')), status TEXT NOT NULL DEFAULT 'Available', created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS loans (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, amount INTEGER NOT NULL, purpose TEXT NOT NULL DEFAULT '', duration TEXT NOT NULL DEFAULT '30 days', interest_rate TEXT NOT NULL DEFAULT '10%', status TEXT NOT NULL DEFAULT 'active', request_date TEXT DEFAULT (date('now')), return_date TEXT NOT NULL DEFAULT '', created_at TEXT DEFAULT (datetime('now')));
@@ -761,8 +1164,12 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS media_files (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, mime_type TEXT NOT NULL, data BLOB NOT NULL, created_at TEXT DEFAULT (datetime('now')));
       CREATE TABLE IF NOT EXISTS cycle_exit_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, member_cycle_id INTEGER NOT NULL, member_id INTEGER, member_phone TEXT NOT NULL, member_name TEXT NOT NULL, cycle_name TEXT NOT NULL, cycle_type TEXT NOT NULL DEFAULT 'public', action_type TEXT NOT NULL DEFAULT 'exit', reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), processed_at TEXT DEFAULT '');
       CREATE TABLE IF NOT EXISTS client_notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_phone TEXT NOT NULL, notif_type TEXT NOT NULL DEFAULT 'cycle_exit', cycle_name TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')));
+      CREATE TABLE IF NOT EXISTS client_password_changes (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER, member_name TEXT NOT NULL, member_phone TEXT NOT NULL, member_email TEXT NOT NULL DEFAULT '', changed_by TEXT NOT NULL DEFAULT 'Client', change_source TEXT NOT NULL DEFAULT 'client_portal', change_note TEXT NOT NULL DEFAULT '', changed_at TEXT DEFAULT (datetime('now')));
     `);
 
+    this.ensureSqliteColumn('members', 'pg_pass_hash', "TEXT NOT NULL DEFAULT ''");
+    this.ensureSqliteColumn('members', 'password_updated_at', "TEXT NOT NULL DEFAULT ''");
+    this.ensureSqliteColumn('members', 'password_changed_by', "TEXT NOT NULL DEFAULT ''");
     this.ensureSqliteColumn('investments', 'returns_date', "TEXT NOT NULL DEFAULT ''");
     this.ensureSqliteColumn('loans', 'return_date', "TEXT NOT NULL DEFAULT ''");
     this.ensureSqliteColumn('member_cycles', 'cycle_number', 'INTEGER NOT NULL DEFAULT 1');
@@ -886,8 +1293,8 @@ export class DatabaseManager {
 
     const memCount = this.sqliteDb.prepare('SELECT COUNT(*) as c FROM members').get() as { c: number };
     if (memCount.c === 0) {
-      const info = this.sqliteDb.prepare('INSERT INTO members (name, phone, email, group_name, balance, total_invested, status, password_hash, age_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)').run(
-        'Nansikombi Josephine', '0752259416', 'josephine@example.com', 'Group 1 - Kawempe Savers', 750000, 500000, 'active', hashPassword('9416')
+      const info = this.sqliteDb.prepare('INSERT INTO members (name, phone, email, group_name, balance, total_invested, status, password_hash, pg_pass_hash, age_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)').run(
+        'Nansikombi Josephine', '0752259416', 'josephine@example.com', 'Group 1 - Kawempe Savers', 750000, 500000, 'active', hashPassword('9416'), hashPgPassword('9416')
       );
       const mid = Number(info.lastInsertRowid);
       const retDate = computeReturnsDate(todayISO(), '60 Days');
@@ -930,8 +1337,14 @@ export class DatabaseManager {
         console.warn('PostgreSQL idle pool client error:', err?.message || err);
       });
       await pool.query('SELECT 1');
+      try {
+        await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+      } catch (_extErr) {}
       await pool.query(PG_SCHEMA_SQL);
       // Idempotent column migrations on existing Postgres deployments
+      await pool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS pg_pass_hash TEXT NOT NULL DEFAULT ''");
+      await pool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS password_updated_at TEXT NOT NULL DEFAULT ''");
+      await pool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS password_changed_by TEXT NOT NULL DEFAULT ''");
       await pool.query("ALTER TABLE investments ADD COLUMN IF NOT EXISTS returns_date TEXT NOT NULL DEFAULT ''");
       await pool.query("ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_date TEXT NOT NULL DEFAULT ''");
       await pool.query('ALTER TABLE member_cycles ADD COLUMN IF NOT EXISTS cycle_number INTEGER NOT NULL DEFAULT 1');
@@ -979,7 +1392,7 @@ export class DatabaseManager {
       { name: 'investment_plans', cols: ['id', 'name', 'price', 'expected_return', 'duration', 'risk', 'risk_level', 'description', 'image_url', 'image_alt', 'slots_left', 'status', 'badge', 'created_at'], hasId: true },
       { name: 'public_cycles', cols: ['id', 'name', 'contribution', 'payout_duration', 'description', 'image_url', 'image_alt', 'status', 'created_at'], hasId: true },
       { name: 'updates', cols: ['id', 'title', 'category', 'excerpt', 'detail', 'image_url', 'image_alt', 'published_date', 'status'], hasId: true },
-      { name: 'members', cols: ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'password_hash', 'age_verified', 'guardian_name', 'created_at'], hasId: true },
+      { name: 'members', cols: ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'password_hash', 'pg_pass_hash', 'password_updated_at', 'password_changed_by', 'age_verified', 'guardian_name', 'created_at'], hasId: true },
       { name: 'investments', cols: ['id', 'member_id', 'member_phone', 'member_name', 'plan_name', 'amount', 'expected_return', 'duration', 'returns_date', 'status', 'created_at'], hasId: true },
       { name: 'savings', cols: ['id', 'member_id', 'member_phone', 'member_name', 'account_type', 'balance', 'open_date', 'status', 'created_at'], hasId: true },
       { name: 'loans', cols: ['id', 'member_id', 'member_phone', 'member_name', 'amount', 'purpose', 'duration', 'interest_rate', 'status', 'request_date', 'return_date', 'created_at'], hasId: true },
@@ -987,7 +1400,8 @@ export class DatabaseManager {
       { name: 'service_requests', cols: ['id', 'request_type', 'applicant_name', 'applicant_phone', 'details_json', 'age_confirmed', 'guardian_name', 'status', 'created_at'], hasId: true },
       { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true },
       { name: 'cycle_exit_requests', cols: ['id', 'member_cycle_id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'cycle_type', 'action_type', 'reason', 'status', 'created_at', 'processed_at'], hasId: true },
-      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true }
+      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true },
+      { name: 'client_password_changes', cols: ['id', 'member_id', 'member_name', 'member_phone', 'member_email', 'changed_by', 'change_source', 'change_note', 'changed_at'], hasId: true }
     ];
 
     const client = await pool.connect();
@@ -1080,8 +1494,13 @@ export class DatabaseManager {
       '-- Instructions: Paste and run this file in your Supabase SQL Editor.',
       '-- ============================================================================',
       '',
+      'CREATE EXTENSION IF NOT EXISTS pgcrypto;',
+      '',
       PG_SCHEMA_SQL.trim(),
       '',
+      "ALTER TABLE members ADD COLUMN IF NOT EXISTS pg_pass_hash TEXT NOT NULL DEFAULT '';",
+      "ALTER TABLE members ADD COLUMN IF NOT EXISTS password_updated_at TEXT NOT NULL DEFAULT '';",
+      "ALTER TABLE members ADD COLUMN IF NOT EXISTS password_changed_by TEXT NOT NULL DEFAULT '';",
       "ALTER TABLE investments ADD COLUMN IF NOT EXISTS returns_date TEXT NOT NULL DEFAULT '';",
       "ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_date TEXT NOT NULL DEFAULT '';",
       'ALTER TABLE member_cycles ADD COLUMN IF NOT EXISTS cycle_number INTEGER NOT NULL DEFAULT 1;',
@@ -1102,8 +1521,8 @@ export class DatabaseManager {
       {
         name: 'members',
         cols: includeAuthHashes
-          ? ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'password_hash', 'age_verified', 'guardian_name', 'created_at']
-          : ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'age_verified', 'guardian_name', 'created_at'],
+          ? ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'password_hash', 'pg_pass_hash', 'password_updated_at', 'password_changed_by', 'age_verified', 'guardian_name', 'created_at']
+          : ['id', 'name', 'phone', 'email', 'group_name', 'balance', 'total_invested', 'status', 'password_updated_at', 'password_changed_by', 'age_verified', 'guardian_name', 'created_at'],
         hasId: true
       },
       { name: 'investments', cols: ['id', 'member_id', 'member_phone', 'member_name', 'plan_name', 'amount', 'expected_return', 'duration', 'returns_date', 'status', 'created_at'], hasId: true },
@@ -1113,7 +1532,8 @@ export class DatabaseManager {
       { name: 'service_requests', cols: ['id', 'request_type', 'applicant_name', 'applicant_phone', 'details_json', 'age_confirmed', 'guardian_name', 'status', 'created_at'], hasId: true },
       { name: 'deletion_requests', cols: ['id', 'full_name', 'phone', 'email', 'reason', 'status', 'requested_at', 'processed_at'], hasId: true },
       { name: 'cycle_exit_requests', cols: ['id', 'member_cycle_id', 'member_id', 'member_phone', 'member_name', 'cycle_name', 'cycle_type', 'action_type', 'reason', 'status', 'created_at', 'processed_at'], hasId: true },
-      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true }
+      { name: 'client_notifications', cols: ['id', 'member_id', 'member_phone', 'notif_type', 'cycle_name', 'title', 'message', 'is_read', 'created_at'], hasId: true },
+      { name: 'client_password_changes', cols: ['id', 'member_id', 'member_name', 'member_phone', 'member_email', 'changed_by', 'change_source', 'change_note', 'changed_at'], hasId: true }
     ];
 
     for (const t of exportTables) {
